@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#eef1f6">
+  <title>מירוץ תלת-ממד</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@500;700;800;900&family=Assistant:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- ===== לוח מחוונים בזמן המירוץ ===== -->
+  <div id="hud" class="hidden">
+    <div class="hud-row">
+      <div class="chip chip-place"><small>מקום</small><strong id="hudPlace">4/4</strong></div>
+      <div class="chip"><small>הקפה</small><strong id="hudLap">1/3</strong></div>
+      <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
+      <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
+    </div>
+    <canvas id="minimap" width="150" height="150"></canvas>
+    <div class="speedo"><strong id="hudSpeed">0</strong><small>קמ״ש</small></div>
+  </div>
+
+  <!-- ===== כפתורי מגע ===== -->
+  <div id="touch" class="hidden" aria-hidden="true">
+    <div class="touch-group touch-steer">
+      <button class="touch-btn" data-key="left">◀</button>
+      <button class="touch-btn" data-key="right">▶</button>
+    </div>
+    <div class="touch-group touch-pedals">
+      <button class="touch-btn touch-brake" data-key="brake">בלם</button>
+      <button class="touch-btn touch-gas" data-key="gas">גז</button>
+    </div>
+  </div>
+
+  <div id="countdown" class="hidden"></div>
+
+  <!-- ===== מסך פתיחה ===== -->
+  <div id="menu" class="overlay">
+    <div class="card">
+      <div class="badge">🏁</div>
+      <h1>מירוץ תלת-ממד</h1>
+      <p class="lead">שלוש הקפות, שלושה יריבים. מי יגיע ראשון לקו?</p>
+      <ul class="howto">
+        <li><kbd>↑</kbd> / <kbd>W</kbd> גז</li>
+        <li><kbd>↓</kbd> / <kbd>S</kbd> בלם ורוורס</li>
+        <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> היגוי</li>
+        <li class="touch-only">בטלפון: כפתורים על המסך</li>
+      </ul>
+      <button id="startButton" class="primary-button">יוצאים למירוץ</button>
+    </div>
+  </div>
+
+  <!-- ===== מסך סיום ===== -->
+  <div id="results" class="overlay hidden">
+    <div class="card">
+      <div class="badge" id="resultBadge">🏆</div>
+      <h1 id="resultTitle">סיימת!</h1>
+      <ol id="resultList" class="results"></ol>
+      <p id="bestLap" class="lead"></p>
+      <button id="againButton" class="primary-button">עוד מירוץ</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

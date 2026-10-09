@@ -1,0 +1,341 @@
+/* ===== מירוץ תלת-ממד — אותה שפת עיצוב כמו באתר:
+   קו מתאר שחור קשיח, צל חד בלי טשטוש, צבעים שטוחים. ===== */
+
+:root {
+  --ink: #1a1f2e;
+  --ink-soft: #5c6478;
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-warm: #fdf8ec;
+  --brand: #16785c;
+  --brand-strong: #0f5943;
+  --brand-soft: #d8efe6;
+  --gold: #f5c542;
+  --sky: #3f8fd8;
+  --berry: #d8503f;
+  --purple: #7a5cc9;
+  --radius: 16px;
+  --shadow: 5px 5px 0 var(--ink);
+  --f-display: "Heebo", "Arial Hebrew", system-ui, sans-serif;
+  --f-body: "Assistant", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+h1 {
+  font-family: var(--f-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+  line-height: 1.15;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hidden { display: none !important; }
+
+/* ---------- כרטיסי מסך ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(26, 31, 46, .09) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(238, 241, 246, .82);
+  z-index: 30;
+}
+
+.card {
+  width: min(440px, 100%);
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 26px 24px 24px;
+  text-align: center;
+}
+
+.badge {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.lead {
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+  margin: 0 0 16px;
+}
+
+.howto {
+  list-style: none;
+  padding: 12px 14px;
+  margin: 0 0 20px;
+  background: var(--surface-warm);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  text-align: right;
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 6px;
+  text-align: center;
+  font-family: var(--f-display);
+  font-weight: 700;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.touch-only { display: none; }
+@media (pointer: coarse) { .touch-only { display: list-item; } }
+
+.primary-button {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: #fff;
+  background: var(--brand);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 12px 34px;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+
+.primary-button:hover,
+.primary-button:focus-visible {
+  background: var(--brand-strong);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+  outline: none;
+}
+
+/* ---------- טבלת תוצאות ---------- */
+
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.results li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  font-weight: 700;
+  background: var(--surface);
+}
+
+.results li.me { background: var(--brand-soft); }
+
+.results .pos {
+  font-family: var(--f-display);
+  font-weight: 900;
+  width: 28px;
+}
+
+.results .swatch {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  flex: none;
+}
+
+.results .name { flex: 1; text-align: right; }
+.results .time { font-family: var(--f-display); direction: ltr; }
+
+/* ---------- לוח מחוונים ---------- */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-row {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 74px;
+  padding: 4px 12px 6px;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--ink);
+  line-height: 1.1;
+}
+
+.chip small { font-weight: 700; color: var(--ink-soft); font-size: .78rem; }
+.chip strong { font-family: var(--f-display); font-weight: 800; font-size: 1.35rem; direction: ltr; }
+.chip-place { background: var(--gold); }
+.chip-place small { color: var(--ink); }
+
+.chip-button {
+  pointer-events: auto;
+  margin-inline-start: auto;
+  min-width: 0;
+  justify-content: center;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+#minimap {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 70px);
+  left: 12px;
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, .85);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.speedo {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 18px;
+  background: var(--ink);
+  color: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--gold);
+}
+
+.speedo strong { font-family: var(--f-display); font-weight: 900; font-size: 1.8rem; min-width: 3ch; text-align: center; }
+.speedo small { font-weight: 700; }
+
+/* ---------- ספירה לאחור ---------- */
+
+#countdown {
+  position: fixed;
+  top: 32%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  min-width: 130px;
+  padding: 6px 28px;
+  font-family: var(--f-display);
+  font-weight: 900;
+  font-size: clamp(3rem, 14vw, 5.5rem);
+  text-align: center;
+  background: var(--gold);
+  border: 4px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 6px 6px 0 var(--ink);
+  pointer-events: none;
+}
+
+#countdown.go { background: var(--brand); color: #fff; }
+#countdown.pop { animation: pop .35s ease-out; }
+
+@keyframes pop {
+  from { transform: translate(-50%, -50%) scale(1.5); }
+  to { transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ---------- כפתורי מגע ---------- */
+
+#touch {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  padding: 0 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  z-index: 15;
+  direction: ltr; /* ההגה תמיד משמאל והדוושות מימין, כמו ברוב משחקי הנייד */
+}
+
+.touch-group { display: flex; gap: 12px; }
+
+.touch-btn {
+  width: 76px;
+  height: 76px;
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .92);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 4px 4px 0 var(--ink);
+  touch-action: none;
+}
+
+.touch-btn.active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.touch-gas { background: var(--brand); color: #fff; width: 88px; height: 88px; font-size: 1.3rem; }
+.touch-brake { background: var(--berry); color: #fff; font-size: 1.1rem; }
+
+/* כשיש כפתורי מגע, מד המהירות עולה מעליהם */
+body.touch .speedo { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 100px); }
+
+@media (max-width: 420px) {
+  .chip { min-width: 62px; padding: 3px 8px 5px; }
+  .chip strong { font-size: 1.1rem; }
+  #minimap { width: 96px; height: 96px; }
+}

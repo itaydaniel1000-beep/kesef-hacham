@@ -821,6 +821,23 @@ resize();
 const STEP = 1 / 120;
 let acc = 0;
 let last = performance.now();
+let lastFrameAt = performance.now();
+
+/* במולטיפלייר המשחק חייב להמשיך גם כשהחלון לא גלוי (לשונית אחרת, חלון ממוזער או מכוסה):
+   הדפדפן עוצר אז את requestAnimationFrame, והמכונית שלך הייתה "קופאת" אצל כל החברים.
+   שעון ב-Worker לא נעצר כך — ממנו ממשיכים את הפיזיקה והשליחה, בלי לצייר */
+const ticker = new Worker(URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 50);"], { type: "text/javascript" })));
+ticker.onmessage = () => {
+  const now = performance.now();
+  if (!mpRoster || !RACING.includes(state) || now - lastFrameAt < 150) return;
+  const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
+  last = now;
+  acc += dt;
+  while (acc >= STEP) {
+    step(STEP);
+    acc -= STEP;
+  }
+};
 let orbit = 0;
 let lastPausedDraw = 0;
 
@@ -887,6 +904,7 @@ function frame(now) {
   input.capture = RACING.includes(state) && !(state === "finished" && !resultsShownAt);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)) * TIME_SCALE;
   last = now;
+  lastFrameAt = performance.now();
 
   if (state === "paused") {
     /* בהשהיה לא מציירים בכל פריים — רק פעמיים בשנייה, למקרה שהדפדפן ניקה את התמונה */

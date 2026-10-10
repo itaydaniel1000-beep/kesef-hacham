@@ -37,12 +37,12 @@ const COLORS = [
 
 const RIVALS = 8;
 
-/* קושי: מהירות היריבים, כמה קרוב לגבול הם נוסעים בפניות (skill),
-   וכמה הגומייה עוזרת לך (ahead = כמה מאט מי שבורח, behind = כמה מאיץ מי שמאחור) */
+/* קושי: כמה קרוב לגבול היריבים נוסעים בפניות (skill),
+   וכמה הגומייה עוזרת (ahead = כמה מאט מי שבורח, behind = כמה מאיץ בוט שנשאר מאחור) */
 const LEVELS = {
-  easy: { name: "קל", ai: 0.96, skill: 0.88, ahead: 0.04, behind: 0.02 },
-  normal: { name: "בינוני", ai: 1.04, skill: 0.94, ahead: 0, behind: 0.05 },
-  hard: { name: "קשה", ai: 1.1, skill: 0.98, ahead: 0, behind: 0.08 }
+  easy: { name: "קל", skill: 0.88, ahead: 0.04, behind: 0.02 },
+  normal: { name: "בינוני", skill: 0.94, ahead: 0, behind: 0.05 },
+  hard: { name: "קשה", skill: 0.98, ahead: 0, behind: 0.08 }
 };
 
 const settings = { track: "forest", type: "grip", color: COLORS[0].color, level: "normal", muted: false, music: true };
@@ -189,9 +189,9 @@ function buildCars() {
   rivals = [];
   drivers = [];
   for (let i = 0; i < RIVALS; i++) {
+    /* כל בוט מקבל באקראי אחת משלוש המכוניות שגם אתה יכול לבחור — עם אותם נתונים בדיוק */
     const car = new Car({
-      name: others[i].name, color: others[i].color, type: types[i % 3],
-      speedScale: (1 - i * 0.004) * level.ai,
+      name: others[i].name, color: others[i].color, type: types[Math.floor(Math.random() * types.length)],
       detail: coarse ? 18 : 45 // בטלפון: רק היריבים הכי קרובים מפורטים
     });
     rivals.push(car);

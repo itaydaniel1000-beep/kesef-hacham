@@ -348,13 +348,6 @@ $("musicButton").addEventListener("click", () => {
 });
 $("musicButton").style.opacity = settings.music ? 1 : 0.45;
 
-let toastTimer = 0;
-function toast(text, seconds = 1.4) {
-  const t = $("toast");
-  t.textContent = text;
-  t.classList.add("show");
-  toastTimer = seconds;
-}
 
 let lastCount = "";
 function updateCountdown() {
@@ -382,10 +375,6 @@ function updateHud(dt) {
   document.querySelector(".nitro").classList.toggle("ready", ready);
   document.querySelector(".touch-nitro").classList.toggle("ready", ready && !player.nitroOn);
   $("speedlines").style.opacity = player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0;
-  if (toastTimer > 0) {
-    toastTimer -= dt;
-    if (toastTimer <= 0) $("toast").classList.remove("show");
-  }
   drawMinimap();
 }
 
@@ -498,7 +487,6 @@ function effects(dt) {
         for (let i = 0; i < 10; i++) particles.emit("dust", car.x, car.y + 0.3, car.z, track.theme.dust, { spread: 8 });
       } else if (ev === "pad" && car === player) {
         audio.pad();
-        toast("דחיפה! ⚡", 0.9);
       } else if (ev === "nitro" && car === player) {
         audio.whoosh();
       }
@@ -544,21 +532,23 @@ const camLook = new THREE.Vector3();
 let camReady = false;
 
 function updateCamera(dt, target, orbit = 0) {
-  /* עומדים מאחורי כיוון התנועה, לא מאחורי האף — כך הדריפט נראה כמו החלקה */
-  const dir = orbit ? target.heading + orbit : target.moveHeading;
+  /* במירוץ המצלמה צמודה מאחורי האף, בלי השהיה — גם בדריפט רואים את גב המכונית */
+  const dir = target.heading + orbit;
   const fx = Math.sin(dir), fz = Math.cos(dir);
   const back = orbit ? 14 : 9.5 + (target.nitroOn ? 1 : 0);
   const wantPos = new THREE.Vector3(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
   const wantLook = new THREE.Vector3(
-    target.x + Math.sin(target.moveHeading) * 6, target.y + 1.2, target.z + Math.cos(target.moveHeading) * 6
+    target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6
   );
-  if (!camReady) {
+  if (!camReady || !orbit) {
     camPos.copy(wantPos);
     camLook.copy(wantLook);
     camReady = true;
+  } else {
+    /* במוסך המצלמה מסתובבת לאט סביב הגריד */
+    camPos.lerp(wantPos, 1 - Math.exp(-dt * 7));
+    camLook.lerp(wantLook, 1 - Math.exp(-dt * 10));
   }
-  camPos.lerp(wantPos, 1 - Math.exp(-dt * 7));
-  camLook.lerp(wantLook, 1 - Math.exp(-dt * 10));
   camera.position.copy(camPos);
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake;
@@ -628,17 +618,11 @@ function step(dt) {
   resolveCollisions(cars);
   race.update(dt);
 
-  if (player.justLapped) {
-    player.justLapped = false;
-    const lap = race.currentLap(player);
-    if (!player.finished) toast(lap === LAPS ? "הקפה אחרונה! 🔥" : `הקפה ${lap}`);
-  }
+  player.justLapped = false;
   if (player.finished && state === "race") {
     state = "finished";
     resultsShownAt = race.time + 1.8;
-    const place = race.placeOf(player);
-    toast(place === 1 ? "ניצחת! 🏆" : `מקום ${place}`, 1.8);
-    audio.fanfare(place === 1);
+    audio.fanfare(race.placeOf(player) === 1);
     celebrate();
   }
   if (state === "finished" && resultsShownAt && race.time >= resultsShownAt) {
@@ -685,5 +669,6 @@ window.__race = {
   get player() { return player; },
   get cars() { return cars; },
   get track() { return track; },
+  audio,
   start: startRace
 };

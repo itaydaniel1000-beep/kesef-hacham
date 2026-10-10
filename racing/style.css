@@ -486,7 +486,7 @@ details.howto ul { margin: 8px 0 2px; padding: 0; list-style: none; display: gri
 
 .secondary-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 
-/* ---------- ניטרו והודעות ---------- */
+/* ---------- ניטרו ---------- */
 
 .nitro {
   display: flex;
@@ -519,25 +519,6 @@ details.howto ul { margin: 8px 0 2px; padding: 0; list-style: none; display: gri
 
 .nitro.ready #nitroFill { background: var(--berry); }
 
-.toast {
-  position: absolute;
-  top: 26%;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: var(--f-display);
-  font-weight: 900;
-  font-size: clamp(1.3rem, 5vw, 2rem);
-  padding: 4px 22px;
-  background: var(--surface);
-  border: 3px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 4px 4px 0 var(--ink);
-  opacity: 0;
-  transition: opacity .2s ease;
-  white-space: nowrap;
-}
-
-.toast.show { opacity: 1; }
 
 /* קווי מהירות בניטרו: קרניים מהמרכז, שקופות באמצע */
 #speedlines {

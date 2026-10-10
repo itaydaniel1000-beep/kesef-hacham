@@ -1,16 +1,11 @@
-/* ===== קול: מנוע, צמיגים, מכות, ניטרו ומוזיקת רקע — הכול נוצר בדפדפן, בלי קבצים ===== */
+/* ===== קול: מנוע, צמיגים, מכות וניטרו נוצרים בדפדפן; מוזיקת הרקע היא קובץ (music.mp3) ===== */
 
 /* הילוכים: ספי מהירות יחסית. בכל הילוך הסיבובים עולים, ובהחלפה צונחים */
 const GEARS = [0, 0.2, 0.38, 0.56, 0.74, 0.9];
 
-/* מנגינת ארקייד קצרה: תווים ב-MIDI, 0 = שקט. שמיניות, 16 צעדים לתיבה */
-const LEAD = [
-  76, 0, 79, 0, 81, 0, 79, 76, 74, 0, 76, 0, 72, 0, 0, 0,
-  76, 0, 79, 0, 81, 0, 84, 81, 79, 0, 76, 0, 79, 0, 0, 0,
-  72, 0, 74, 0, 76, 0, 74, 72, 71, 0, 72, 0, 67, 0, 0, 0,
-  72, 0, 76, 0, 79, 0, 81, 79, 76, 0, 74, 0, 72, 0, 0, 0
-];
-const BASS = [45, 45, 52, 45, 41, 41, 48, 41, 43, 43, 50, 43, 48, 48, 43, 47];
+const MUSIC_VOLUME = 0.35;
+/* אורך הלולאה במוזיקה: 32 תיבות ב-128 BPM */
+const MUSIC_LOOP = (32 * 4 * 60) / 128;
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);
 
 export class GameAudio {
@@ -35,7 +30,7 @@ export class GameAudio {
       this.master.gain.value = this.muted ? 0 : 1;
       this.master.connect(ctx.destination);
       this.musicBus = ctx.createGain();
-      this.musicBus.gain.value = this.musicOn ? 0.5 : 0;
+      this.musicBus.gain.value = this.musicOn ? MUSIC_VOLUME : 0;
       this.musicBus.connect(this.master);
 
       /* מנוע: מסור + ריבוע באוקטבה נמוכה, דרך מסנן */
@@ -88,7 +83,7 @@ export class GameAudio {
 
   setMusic(on) {
     this.musicOn = on;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? 0.5 : 0, this.ctx.currentTime, 0.1);
+    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? MUSIC_VOLUME : 0, this.ctx.currentTime, 0.1);
   }
 
   /* נקרא בכל פריים עם מצב המכונית של השחקן */
@@ -185,42 +180,26 @@ export class GameAudio {
     notes.forEach((n, i) => this.tone(midi(n), t + i * 0.14, i === notes.length - 1 ? 0.7 : 0.16, { gain: 0.12 }));
   }
 
-  /* מתזמן מוזיקה: מסתכל קצת קדימה ומתזמן תווים בזמן מדויק של שעון הקול */
-  startMusic() {
+  /* מוזיקת הרקע: קובץ מוכן (tools/make-music.py), מתנגן בלולאה של 32 תיבות בדיוק */
+  async startMusic() {
     const ctx = this.ctx;
-    const stepLen = 60 / 140 / 2; // שמיניות ב-140 BPM
-    let step = 0;
-    let next = ctx.currentTime + 0.1;
-    setInterval(() => {
-      if (ctx.state !== "running") return;
-      if (!this.musicOn) {
-        next = ctx.currentTime + 0.1;
-        return;
-      }
-      while (next < ctx.currentTime + 0.25) {
-        const lead = LEAD[step % LEAD.length];
-        if (lead) this.tone(midi(lead), next, stepLen * 0.9, { type: "square", gain: 0.05, bus: this.musicBus });
-        if (step % 2 === 0) {
-          const bass = BASS[(step / 2) % BASS.length];
-          this.tone(midi(bass), next, stepLen * 1.8, { type: "triangle", gain: 0.12, bus: this.musicBus });
-        }
-        /* היי-האט קטן מרעש */
-        if (step % 2 === 1) {
-          const src = ctx.createBufferSource();
-          src.buffer = this.noise;
-          const f = ctx.createBiquadFilter();
-          f.type = "highpass";
-          f.frequency.value = 7000;
-          const g = ctx.createGain();
-          g.gain.setValueAtTime(0.04, next);
-          g.gain.exponentialRampToValueAtTime(0.001, next + 0.05);
-          src.connect(f).connect(g).connect(this.musicBus);
-          src.start(next, Math.random() * 0.5);
-          src.stop(next + 0.06);
-        }
-        next += stepLen;
-        step++;
-      }
-    }, 80);
+    try {
+      const res = await fetch("music.mp3");
+      const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      /* מקודד ה-MP3 מוסיף שקט קצר בהתחלה; מתחילים את הלולאה מהצליל הראשון */
+      const data = buffer.getChannelData(0);
+      let first = 0;
+      while (first < data.length && Math.abs(data[first]) < 0.002) first++;
+      const start = first / buffer.sampleRate;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.loopStart = start;
+      src.loopEnd = Math.min(buffer.duration, start + MUSIC_LOOP);
+      src.connect(this.musicBus);
+      src.start(0, start);
+    } catch {
+      /* אין קובץ או שהדפדפן לא מפענח — המשחק ממשיך בלי מוזיקה */
+    }
   }
 }

@@ -177,7 +177,7 @@ const snow = new Pen()
   .turn(90, 140)
   /* במעלה ההר: אצבע עם סיכת ראש */
   .straight(200)
-  .turn(90, 40).straight(230, 4).hairpin(-1, 30, 6).straight(230, 2).turn(90, 40, 0)
+  .turn(90, 40).straight(230, 3).hairpin(-1, 30, 4).straight(230, 2).turn(90, 40, 0)
   .straight(300)
   .turn(90, 140)
   .straight(750)
@@ -229,8 +229,8 @@ export const TRACKS = [
     control: snow,
     boosts: padsEvery(4, 0.1),
     ice: [[0.62, 0.66], [0.86, 0.9]],
-    /* מכל גובה כזה ומעלה הכביש הוא גשר (הגשר ב-8.5; סיכת הראש בהר מגיעה רק ל-6): בלי סוללת עפר, עם עמודים */
-    bridge: { minY: 7 },
+    /* מכל גובה כזה ומעלה הכביש הוא גשר (הגשר ב-8.5; סיכת הראש בהר נשארת מתחת, ב-4): בלי סוללת עפר, עם עמודים */
+    bridge: { minY: 4.5 },
     theme: {
       ground: 0xeef3f8, embank: 0xdfe8f1, sky: 0xd3e5f5, fog: [120, 300],
       curbA: PALETTE.sky, curbB: PALETTE.surface, wallA: PALETTE.purple, wallB: PALETTE.surface,

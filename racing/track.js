@@ -1,7 +1,7 @@
 /* ===== המסלול: עקומה סגורה עם גובה, כביש, שוליים, קיר, סוללות, גשר וקו סיום ===== */
 
 import * as THREE from "three";
-import { PALETTE, toon, outlined, disposeTree } from "./toon.js";
+import { PALETTE, toon, outlined } from "./toon.js";
 import { buildScenery } from "./scenery.js";
 
 export const ROAD_HALF = 7;               // חצי רוחב הכביש
@@ -125,6 +125,7 @@ export class Track {
   }
 
   build(scene) {
+    this.built = true;
     scene.add(this.group);
     this.buildGround();
     this.buildRoad();
@@ -134,12 +135,6 @@ export class Track {
     this.buildStartLine();
     buildScenery(this);
   }
-
-  dispose(scene) {
-    scene.remove(this.group);
-    disposeTree(this.group);
-  }
-
 
   buildGround() {
     /* הקרקע מכסה את כל המסלול ועוד שוליים רחבים, לא משנה כמה הוא גדול */

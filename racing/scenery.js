@@ -69,7 +69,7 @@ export function buildScenery(track) {
   track.sky = sky;
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2 + rand() * 0.2;
-    const r = 230 + rand() * 30; // בתוך הערפל, כדי שייראו כצלליות באופק
+    const r = 380 + rand() * 40; // רחוק מעבר לכל מה שנראה — ובלי ערפל, כדי שייראו באופק
     const far = backdrop(track.def.scenery, rand);
     far.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     sky.add(far);
@@ -182,7 +182,7 @@ function snowThing(rand) {
 function backdrop(kind, rand) {
   const t = new THREE.Group();
   if (kind === "desert") {
-    const mesa = outlined(geo.mesa, rand() < 0.5 ? 0xd27a3c : 0xe09a52, 0.015);
+    const mesa = outlined(geo.mesa, toon(rand() < 0.5 ? 0xe7a77a : 0xf0bd8a, { fog: false }), 0.015);
     const h = 25 + rand() * 30;
     mesa.scale.set(30 + rand() * 30, h, 25 + rand() * 20);
     mesa.position.y = h / 2;
@@ -191,11 +191,11 @@ function backdrop(kind, rand) {
   }
   const h = 60 + rand() * 50;
   const w = 45 + rand() * 30;
-  const mountain = outlined(geo.mountain, kind === "snow" ? 0x9fb7d1 : 0x6fa58a, 0.012);
+  const mountain = outlined(geo.mountain, toon(kind === "snow" ? 0xbccde0 : 0x9cc4b0, { fog: false }), 0.012);
   mountain.scale.set(w, h, w);
   mountain.position.y = h / 2;
   t.add(mountain);
-  const cap = outlined(geo.mountain, PALETTE.surface, 0.012);
+  const cap = outlined(geo.mountain, toon(PALETTE.surface, { fog: false }), 0.012);
   const capH = h * (kind === "snow" ? 0.45 : 0.28);
   cap.scale.set(w * (capH / h) * 1.02, capH, w * (capH / h) * 1.02);
   cap.position.y = h - capH / 2 + 0.3;

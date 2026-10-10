@@ -26,7 +26,7 @@ export class Race {
 
   standings() {
     return [...this.cars].sort((a, b) => {
-      if (a.finished && b.finished) return a.finishTime - b.finishTime;
+      if (a.finished && b.finished) return a.finishTime - b.finishTime || b.distance - a.distance;
       if (a.finished) return -1;
       if (b.finished) return 1;
       return b.distance - a.distance;

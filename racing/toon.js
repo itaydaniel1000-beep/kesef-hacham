@@ -39,6 +39,7 @@ export function shared(resource) {
 /* משחרר מהזיכרון של הכרטיס הגרפי כל מה שנבנה במיוחד עבור העצם הזה — ולא נוגע במשותף */
 export function disposeTree(root) {
   root.traverse((o) => {
+    if (o.isInstancedMesh) o.dispose();
     if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
     for (const m of [].concat(o.material || [])) {
       if (m.userData.shared) continue;

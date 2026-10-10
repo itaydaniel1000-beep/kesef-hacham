@@ -101,11 +101,11 @@ let track = null;
 function useTrack(id) {
   const next = trackData.get(findTrack(id).id);
   if (next === track) return;
-  if (track) track.dispose(scene);
+  /* כל מסלול נבנה פעם אחת; החלפה רק מוציאה מהסצנה את הקודם ומכניסה את הבא */
+  if (track) scene.remove(track.group);
   track = next;
-  /* בונים מחדש בכל פעם: הקבוצה הקודמת שוחררה */
-  track.group = new THREE.Group();
-  track.build(scene);
+  if (track.built) scene.add(track.group);
+  else track.build(scene);
   const th = track.theme;
   scene.background.set(th.sky);
   scene.fog.color.set(th.sky);
@@ -666,6 +666,7 @@ const STEP = 1 / 120;
 let acc = 0;
 let last = performance.now();
 let orbit = 0;
+let lastPausedDraw = 0;
 
 function step(dt) {
   if (state === "countdown") {
@@ -716,12 +717,12 @@ function step(dt) {
 
 function frame(now) {
   /* מקשי המשחק "נבלעים" רק בזמן מירוץ; במוסך ובתוצאות רווח וחצים עובדים כרגיל על כפתורים */
-  input.capture = RACING.includes(state);
+  input.capture = RACING.includes(state) && !(state === "finished" && !resultsShownAt);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)) * TIME_SCALE;
   last = now;
 
   if (state === "paused") {
-    /* בהשהיה רק מציירים את התמונה הקפואה */
+    /* בהשהיה לא מציירים בכל פריים — רק פעמיים בשנייה, למקרה שהדפדפן ניקה את התמונה */
   } else if (state === "menu") {
     /* מוסך: המצלמה מסתובבת לאט סביב המכוניות בגריד */
     orbit += dt * 0.25;
@@ -741,7 +742,10 @@ function frame(now) {
   }
 
   /* בהשהיה התמונה האחרונה נשארת על המסך — אין טעם לצייר אותה שוב 60 פעמים בשנייה */
-  if (state !== "paused") renderer.render(scene, camera);
+  if (state !== "paused" || now - lastPausedDraw > 500) {
+    renderer.render(scene, camera);
+    if (state === "paused") lastPausedDraw = now;
+  }
   requestAnimationFrame(frame);
 }
 

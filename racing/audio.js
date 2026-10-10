@@ -174,8 +174,10 @@ export class GameAudio {
     const onGas = active && (car.input.gas > 0 || boosted);
 
     /* הילוך וסל"ד: בתוך כל הילוך הסל"ד עולה, ובהעברה למעלה צונח */
-    let gear = 1;
+    /* העלאת הילוך בסף, הורדה רק קצת מתחתיו — כדי שלא יקפוץ הלוך ושוב סביב הסף */
+    let gear = this.gear;
     while (gear < GEARS.length - 1 && ratio > GEARS[gear]) gear++;
+    while (gear > 1 && ratio < GEARS[gear - 1] - 0.03) gear--;
     if (gear > this.gear && active) this.shift();
     this.gear = gear;
     const lo = GEARS[gear - 1], hi = GEARS[gear];

@@ -71,6 +71,8 @@ export class Car {
     this.airCooldown = 0;
     this.hitWall = false;
     this.topScale = 1;       // עזרת השלמה לבוטים שמאחור (ai.js)
+    this.input = { gas: 0, brake: 0, steer: 0, drift: 0, nitro: 0 };
+    this.offRoad = false;
     this.trackIndex = 0;
     this.lateral = 0;
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
@@ -217,7 +219,7 @@ export class Car {
       }
       if (brake > 0 && (!this.drifting || brakeDrift)) {
         if (this.speed > 0.5) this.speed -= 38 * brake * (this.drifting ? 0.6 : 1) * dt;
-        else this.speed = Math.max(-12, this.speed - 12 * brake * dt);
+        else this.speed = Math.min(this.speed, Math.max(-12, this.speed - 12 * brake * dt)); // בלי לקפוץ אם כבר מתגלגלים אחורה מהר
       }
       if (!gas && !brake && !boosted) {
         const drag = 7 * dt;

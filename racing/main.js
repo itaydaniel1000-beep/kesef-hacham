@@ -340,8 +340,9 @@ function startRace() {
 }
 
 /* הקול פעיל רק כשהמשחק לא בהשהיה והעמוד גלוי — מקום אחד שמחליט, ונקרא מכל מעבר מצב */
+let windowFocused = true;
 function syncAudio() {
-  if (state === "paused" || document.hidden) audio.suspend();
+  if (state === "paused" || document.hidden || !windowFocused) audio.suspend();
   else audio.resume();
 }
 
@@ -411,7 +412,15 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) pause();
   syncAudio();
 });
-addEventListener("blur", pause);
+addEventListener("blur", () => {
+  windowFocused = false;
+  pause();
+  syncAudio();
+});
+addEventListener("focus", () => {
+  windowFocused = true;
+  syncAudio();
+});
 
 $("muteButton").textContent = settings.muted ? "🔇" : "🔊";
 $("muteButton").addEventListener("click", () => {
@@ -625,12 +634,14 @@ const camLook = new THREE.Vector3();
 const wantPos = new THREE.Vector3();   // וקטורים לשימוש חוזר — בלי ליצור חדשים בכל פריים
 const wantLook = new THREE.Vector3();
 let camReady = false;
+let camBack = 9.5;
 
 function updateCamera(dt, target, orbit = 0) {
   /* במירוץ המצלמה צמודה מאחורי האף, בלי השהיה — גם בדריפט רואים את גב המכונית */
   const dir = target.heading + orbit;
   const fx = Math.sin(dir), fz = Math.cos(dir);
-  const back = orbit ? 14 : 9.5 + (target.nitroOn ? 1 : 0);
+  camBack += ((target.nitroOn ? 10.5 : 9.5) - camBack) * Math.min(1, dt * 5); // המצלמה מתרחקת בניטרו בהדרגה
+  const back = orbit ? 14 : camBack;
   wantPos.set(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
   wantLook.set(target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6);
   if (!camReady || !orbit) {
@@ -713,7 +724,7 @@ function step(dt) {
   for (const d of drivers) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
     const gap = (d.car.distance - player.distance) / track.count;
-    const boost = d.car.finished || player.finished ? 0.8 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
+    const boost = player.finished ? 1 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
     d.cruise = d.car.finished ? 15 : 0;
     d.update(dt, track, boost, cars);
   }

@@ -117,16 +117,20 @@ export class Driver {
     /* עקיפה: מכונית איטית ממש לפנינו על אותו קו? עוברים לצד שיש בו יותר מקום */
     let want = 0;
     const ahead = 16 / track.spacing;
-    /* הקרבה נמדדת מהקו הרגיל שלנו (בלי הזזת העקיפה), כדי שהעקיפה לא "תשכח" את המכונית באמצע ותתנדנד */
+    /* נקודת המבט קדימה — גם העקיפה נמדדת ביחס לקו באותה נקודה, כדי שההזזה תהיה בדיוק כמו שתוכננה */
+    const look = 7 + v * 0.28;
+    const ti = track.wrap(i + Math.round(look / track.spacing));
     const myLine = line.off[i] + this.lane;
+    /* המכונית האיטית הקרובה ביותר לפנינו על הקו שלנו (הקרבה נמדדת מהקו הרגיל, בלי הזזת העקיפה) */
     let slow = null;
+    let nearest = Infinity;
     for (const o of others) {
       if (o === car) continue; // גם מכונית שסיימה עדיין על הכביש
       const gap = o.distance - car.distance;
-      if (gap <= 0 || gap > ahead || Math.abs(o.y - car.y) > 2.5) continue;
+      if (gap <= 0 || gap > ahead || gap >= nearest || Math.abs(o.y - car.y) > 2.5) continue;
       if (Math.abs(o.lateral - myLine) > 3 || o.speed > car.speed + 1.5) continue;
       slow = o;
-      break;
+      nearest = gap;
     }
     if (slow) {
       /* הצד נבחר פעם אחת לכל עקיפה — לצד הרחב יותר — ולא מתחלף באמצע */
@@ -134,15 +138,13 @@ export class Driver {
         this.passing = slow;
         this.passSide = slow.lateral > 0 ? -1 : 1;
       }
-      want = slow.lateral + this.passSide * 3.6 - myLine;
+      want = slow.lateral + this.passSide * 3.6 - (line.off[ti] + this.lane);
     } else {
       this.passing = null;
     }
     this.avoid += (want - this.avoid) * Math.min(1, 3 * dt);
 
     /* היגוי: רודפים אחרי נקודה על הקו, רחוקה יותר ככל שנוסעים מהר */
-    const look = 7 + v * 0.28;
-    const ti = track.wrap(i + Math.round(look / track.spacing));
     const lat = Math.max(-ROAD_HALF + 1.2, Math.min(ROAD_HALF - 1.2, line.off[ti] + this.lane + this.avoid));
     const p = track.points[ti], l = track.lefts[ti];
     const tx = p.x + l.x * lat, tz = p.z + l.z * lat;

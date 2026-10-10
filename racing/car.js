@@ -278,13 +278,15 @@ export class Car {
     /* הקיר: מחזירים פנימה ומאבדים מהירות */
     const limit = WALL_OFFSET - CAR_RADIUS * 0.7;
     if (Math.abs(this.lateral) > limit) {
-      const p = track.points[this.trackIndex], l = track.lefts[this.trackIndex];
+      const p = track.points[this.trackIndex], l = track.lefts[this.trackIndex], t = track.tangents[this.trackIndex];
       const clamped = Math.sign(this.lateral) * limit;
-      this.x = p.x + l.x * clamped;
-      this.z = p.z + l.z * clamped;
+      /* מחזירים רק את הרכיב הצדדי — ההתקדמות לאורך המסלול נשמרת, כך שהמכונית מחליקה לאורך הקיר */
+      const along = (this.x - p.x) * t.x + (this.z - p.z) * t.z;
+      this.x = p.x + t.x * along + l.x * clamped;
+      this.z = p.z + t.z * along + l.z * clamped;
       this.lateral = clamped;
       if (!this.hitWall && this.speed > 14) this.events.push("wall");
-      this.speed *= 0.97;
+      this.speed *= Math.exp(-1.2 * dt); // שפשוף בקיר: כ-30% מהמהירות בשנייה
       /* מיישרים קצת את האף בחזרה לכיוון המסלול */
       const diff = angleDiff(track.headings[this.trackIndex], this.heading);
       if (Math.abs(diff) < Math.PI / 2) {

@@ -206,14 +206,7 @@ function drawTrackPreview(canvasEl, t) {
   ctx.stroke();
 }
 
-function boundsOf(t) {
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const p of t.points) {
-    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-  }
-  return { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 };
-}
+const boundsOf = (t) => ({ ...t.bounds });
 
 function el(tag, cls, html) {
   const e = document.createElement(tag);
@@ -386,6 +379,8 @@ $("startButton").addEventListener("click", startRace);
 $("againButton").addEventListener("click", startRace);
 $("garageButton").addEventListener("click", toGarage);
 $("pauseButton").addEventListener("click", pause);
+/* כפתורי הפינה לא שומרים פוקוס — אחרת רווח (דריפט) היה לוחץ עליהם שוב */
+for (const id of ["pauseButton", "muteButton", "musicButton"]) $(id).addEventListener("click", (e) => e.currentTarget.blur());
 $("resumeButton").addEventListener("click", resume);
 $("restartButton").addEventListener("click", startRace);
 $("quitButton").addEventListener("click", toGarage);
@@ -692,16 +687,17 @@ function step(dt) {
   }
   if (state === "race") {
     countdown -= dt;
-    if (countdown < 0.3) show("countdown", false);
+    if (countdown < 0.3 && countdown + dt >= 0.3) show("countdown", false);
   }
 
   const level = LEVELS[settings.level];
   if (player.finished || autopilot) {
     (autopilot || cooldownDriver).update(dt, track, 1, cars);
     if (player.finished) {
-      player.input.gas = 0;
+      /* אחרי הסיום ממשיכים לגלגל לאט כמו הבוטים — מכונית עומדת על הקו הייתה חוסמת את מי שמסיים אחריך */
       player.input.nitro = 0;
-      player.input.brake = player.speed > 6 ? 0.4 : 0;
+      player.input.gas = player.speed < 15 ? 1 : 0;
+      player.input.brake = player.speed > 18 ? 0.4 : 0;
     }
   } else {
     Object.assign(player.input, input.read());

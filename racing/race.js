@@ -53,7 +53,8 @@ export class Race {
 }
 
 export function formatTime(t) {
-  const m = Math.floor(t / 60);
-  const s = t - m * 60;
+  const cs = Math.round(t * 100); // מעגלים קודם, כדי ש-59.996 יוצג 1:00.00 ולא 0:60.00
+  const m = Math.floor(cs / 6000);
+  const s = (cs - m * 6000) / 100;
   return `${m}:${s.toFixed(2).padStart(5, "0")}`;
 }

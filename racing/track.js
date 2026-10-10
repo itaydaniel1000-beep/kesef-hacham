@@ -55,8 +55,14 @@ export class Track {
     this.isBridge = this.points.map((p) => p.y >= minY);
     this.isIce = new Array(count).fill(false);
     for (const [a, b] of def.ice) {
-      for (let i = Math.floor(a * count); i < b * count; i++) this.isIce[this.wrap(i)] = true;
+      for (let i = Math.floor(a * count); i < Math.floor(b * count); i++) this.isIce[this.wrap(i)] = true;
     }
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of this.points) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    }
+    this.bounds = { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 };
     this.boosts = def.boosts.map(([f, lateral]) => ({ index: Math.floor(f * count), lateral }));
 
     this.group = new THREE.Group();
@@ -138,11 +144,7 @@ export class Track {
 
   buildGround() {
     /* הקרקע מכסה את כל המסלול ועוד שוליים רחבים, לא משנה כמה הוא גדול */
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of this.points) {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-    }
+    const { minX, maxX, minZ, maxZ } = this.bounds;
     const size = Math.max(maxX - minX, maxZ - minZ) + 1400;
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), toon(this.theme.ground));
     ground.rotation.x = -Math.PI / 2;

@@ -86,13 +86,15 @@ export class Driver {
 
   /* מחשבים מראש את קו המירוץ ותכנון המהירות (בזמן הספירה לאחור), כדי שלא תהיה קפיצה ב"צא!" */
   prepare(track) {
-    speedPlan(track, this.car, this.skill);
+    this.planTrack = track;
+    this.plan = speedPlan(track, this.car, this.skill);
   }
 
   update(dt, track, boost = 1, others = []) {
     const car = this.car;
     const line = racingLine(track);
-    const plan = speedPlan(track, car, this.skill);
+    if (this.planTrack !== track) this.prepare(track);
+    const plan = this.plan;
     const i = car.trackIndex;
     const v = Math.abs(car.speed);
 
@@ -113,7 +115,7 @@ export class Driver {
     let want = 0;
     const ahead = 16 / track.spacing;
     for (const o of others) {
-      if (o === car || o.finished) continue;
+      if (o === car) continue; // גם מכונית שסיימה עדיין על הכביש
       const gap = o.distance - car.distance;
       if (gap <= 0 || gap > ahead || Math.abs(o.y - car.y) > 2.5) continue;
       const myLat = line.off[i] + this.lane + this.avoid;

@@ -1,6 +1,7 @@
 /* ===== מעקב המירוץ: הקפות, מקומות וזמנים ===== */
 
-export const LAPS = 3;
+/* הקפה אחת על מסלול ארוך */
+export const LAPS = 1;
 
 export class Race {
   constructor(track, cars, player) {
@@ -42,6 +43,12 @@ export class Race {
 
   placeOf(car) {
     return this.standings().indexOf(car) + 1;
+  }
+
+  /* כמה מהמירוץ עבר, מ-0 עד 1 */
+  progress(car) {
+    if (car.finished) return 1;
+    return Math.min(1, Math.max(0, car.distance / (this.track.count * LAPS)));
   }
 
   currentLap(car) {

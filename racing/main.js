@@ -7,7 +7,7 @@ import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, resolveCollisions } from "./car.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
-import { Race, LAPS, formatTime } from "./race.js";
+import { Race, formatTime } from "./race.js";
 import { Particles } from "./particles.js";
 import { GameAudio } from "./audio.js";
 
@@ -26,14 +26,22 @@ const COLORS = [
   { color: PALETTE.gold, name: "זהבי" },
   { color: PALETTE.sky, name: "תכלת" },
   { color: PALETTE.berry, name: "אדומי" },
-  { color: PALETTE.purple, name: "סגולי" }
+  { color: PALETTE.purple, name: "סגולי" },
+  { color: 0xf08a24, name: "כתומי" },
+  { color: 0xe86aa6, name: "ורודי" },
+  { color: 0x1fb5a8, name: "טורקיז" },
+  { color: 0x8cc63f, name: "ליים" },
+  { color: 0x2f4ea8, name: "כחולי" }
 ];
 
-/* קושי: מהירות היריבים, וכמה הגומייה עוזרת לך (ahead = כמה מאט מי שבורח, behind = כמה מאיץ מי שמאחור) */
+const RIVALS = 8;
+
+/* קושי: מהירות היריבים, כמה קרוב לגבול הם נוסעים בפניות (skill),
+   וכמה הגומייה עוזרת לך (ahead = כמה מאט מי שבורח, behind = כמה מאיץ מי שמאחור) */
 const LEVELS = {
-  easy: { name: "קל", ai: 0.9, ahead: 0.1, behind: 0.03 },
-  normal: { name: "בינוני", ai: 1, ahead: 0.06, behind: 0.07 },
-  hard: { name: "קשה", ai: 1.06, ahead: 0.03, behind: 0.1 }
+  easy: { name: "קל", ai: 0.9, skill: 0.8, ahead: 0.08, behind: 0.02 },
+  normal: { name: "בינוני", ai: 0.98, skill: 0.88, ahead: 0.03, behind: 0.04 },
+  hard: { name: "קשה", ai: 1.02, skill: 0.94, ahead: 0, behind: 0.05 }
 };
 
 const settings = { track: "forest", type: "grip", color: PALETTE.brand, level: "normal", muted: false, music: true };
@@ -120,18 +128,20 @@ function buildCars() {
   const mine = COLORS.find((c) => c.color === settings.color);
   player = new Car({ name: "אני", color: mine.color, type: settings.type });
   player.brakeDrifts = true;
-  /* היריבים מקבלים את הצבעים שלא בחרת */
+  /* היריבים מקבלים את הצבעים שלא בחרת. כל אחד מעט שונה: סוג מכונית, מהירות, נטייה בקו ואומץ בפניות */
   const others = COLORS.filter((c) => c !== mine);
-  const roster = [
-    { type: "grip", scale: 0.93, line: 2.5, caution: 1.05 },
-    { type: "accel", scale: 0.95, line: -2.5, caution: 1 },
-    { type: "speed", scale: 0.95, line: 0.5, caution: 0.95 }
-  ];
-  rivals = roster.map((r, i) => new Car({
-    name: others[i].name, color: others[i].color, type: r.type, speedScale: r.scale * level.ai
-  }));
-  drivers = rivals.map((car, i) => new Driver(car, roster[i]));
-  autopilot = AUTOPILOT ? new Driver(player, { line: 0, caution: 0.95 }) : null;
+  const types = ["speed", "grip", "accel"];
+  rivals = [];
+  drivers = [];
+  for (let i = 0; i < RIVALS; i++) {
+    const car = new Car({
+      name: others[i].name, color: others[i].color, type: types[i % 3],
+      speedScale: (1 - i * 0.008) * level.ai
+    });
+    rivals.push(car);
+    drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.01 }));
+  }
+  autopilot = AUTOPILOT ? new Driver(player, { skill: 0.88 }) : null;
   /* אחרי קו הסיום המחשב לוקח את ההגה ומאט בעדינות */
   cooldownDriver = new Driver(player);
   cars = [...rivals, player];
@@ -139,12 +149,12 @@ function buildCars() {
   gridUp();
 }
 
-/* גריד הזינוק: שתי שורות לפני הקו, השחקן מתחיל אחרון */
+/* גריד הזינוק: שלוש מכוניות בשורה, השחקן מתחיל אחרון */
 function gridUp() {
-  const slots = [[-5, 3], [-5, -3], [-13, 3], [-13, -3]];
   cars.forEach((car, i) => {
-    const [back, side] = slots[i];
-    car.placeAt(track, track.wrap(back), side);
+    const row = Math.floor(i / 3), col = (i % 3) - 1;
+    const back = Math.round(-(4 + row * 7.5 + (col === 0 ? 1.5 : 0)) / track.spacing);
+    car.placeAt(track, track.wrap(back), col * 4.6);
   });
   particles.clear();
 }
@@ -367,7 +377,7 @@ function updateCountdown() {
 
 function updateHud(dt) {
   $("hudPlace").textContent = `${race.placeOf(player)}/${cars.length}`;
-  $("hudLap").textContent = `${race.currentLap(player)}/${LAPS}`;
+  $("hudLap").textContent = `${Math.round(race.progress(player) * 100)}%`;
   $("hudTime").textContent = formatTime(player.finished ? player.finishTime : race.time);
   $("hudSpeed").textContent = Math.round(Math.abs(player.speed) * 4.2);
   $("nitroFill").style.width = `${Math.round(player.nitro * 100)}%`;
@@ -380,9 +390,9 @@ function updateHud(dt) {
 
 function showResults() {
   const place = race.placeOf(player);
-  const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!", "מקום רביעי"];
-  $("resultTitle").textContent = titles[place - 1];
-  $("resultBadge").textContent = ["🏆", "🥈", "🥉", "🏁"][place - 1];
+  const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
+  $("resultTitle").textContent = titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
+  $("resultBadge").textContent = ["🏆", "🥈", "🥉"][place - 1] || "🏁";
   const list = $("resultList");
   list.innerHTML = "";
   race.standings().forEach((car, i) => {
@@ -396,8 +406,7 @@ function showResults() {
     li.querySelector(".name").textContent = car.name;
     list.appendChild(li);
   });
-  const best = Math.min(...player.lapTimes);
-  $("bestLap").textContent = Number.isFinite(best) ? `ההקפה הכי טובה שלך: ${formatTime(best)}` : "";
+  $("bestLap").textContent = player.finished ? `הזמן שלך: ${formatTime(player.finishTime)}` : "";
   show("results", true);
   show("touch", false);
 }
@@ -598,7 +607,7 @@ function step(dt) {
 
   const level = LEVELS[settings.level];
   if (player.finished || autopilot) {
-    (autopilot || cooldownDriver).update(dt, track);
+    (autopilot || cooldownDriver).update(dt, track, 1, cars);
     if (player.finished) {
       player.input.gas = 0;
       player.input.nitro = 0;
@@ -610,8 +619,8 @@ function step(dt) {
   for (const d of drivers) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
     const gap = (d.car.distance - player.distance) / track.count;
-    const boost = d.car.finished || player.finished ? 0.8 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.25));
-    d.update(dt, track, boost);
+    const boost = d.car.finished || player.finished ? 0.8 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
+    d.update(dt, track, boost, cars);
     if (d.car.finished) d.car.input.gas = d.car.speed < 15 ? 1 : 0;
   }
   for (const car of cars) car.update(dt, track, cars);

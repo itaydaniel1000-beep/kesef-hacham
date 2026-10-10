@@ -38,7 +38,9 @@ export function buildScenery(track) {
 
   const maker = { forest: forestThing, desert: desertThing, snow: snowThing }[track.def.scenery];
   let placed = 0;
-  for (let tries = 0; tries < 2600 && placed < 170; tries++) {
+  /* כמות הנוף לפי אורך המסלול — בערך עץ אחד לכל 9 מטרים של כביש */
+  const want = Math.round(track.length / 9);
+  for (let tries = 0; tries < want * 16 && placed < want; tries++) {
     const x = minX - 90 + rand() * (maxX - minX + 180);
     const z = minZ - 90 + rand() * (maxZ - minZ + 180);
     const c = track.clearance(x, z);
@@ -52,7 +54,7 @@ export function buildScenery(track) {
   }
 
   /* רקע רחוק: הרים, מסות או דיונות גדולות בטבעת סביב המסלול */
-  const ring = span * 0.75 + 140;
+  const ring = span * 0.5 + 220;
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2 + rand() * 0.2;
     const x = cx + Math.cos(a) * (ring + rand() * 60), z = cz + Math.sin(a) * (ring + rand() * 60);

@@ -8,7 +8,7 @@ export const ROAD_HALF = 7;               // חצי רוחב הכביש
 export const WALL_OFFSET = ROAD_HALF + 7; // איפה עומד הקיר מהמרכז
 /* שכבות הכביש מונחות זו מעל זו עם רווח, כדי שלא יהבהבו זו דרך זו מרחוק. זה גובה פני האספלט */
 export const ROAD_TOP = 0.14;
-const SAMPLES = 900;
+const SAMPLE_SPACING = 1.6;            // מרחק בין דגימות לאורך המסלול
 const EMBANK_SLOPE = 1.6;                 // כמה רחוק יוצאת הסוללה לכל יחידת גובה
 
 export class Track {
@@ -20,14 +20,16 @@ export class Track {
       true,
       "centripetal"
     );
-    this.count = SAMPLES;
     this.length = curve.getLength();
-    this.spacing = this.length / SAMPLES;
-    this.points = curve.getSpacedPoints(SAMPLES).slice(0, SAMPLES);
+    /* מספר הדגימות לפי אורך המסלול, כך שהמרווח ביניהן קבוע בכל המסלולים */
+    const count = Math.ceil(this.length / SAMPLE_SPACING);
+    this.count = count;
+    this.spacing = this.length / count;
+    this.points = curve.getSpacedPoints(count).slice(0, count);
     /* העקומה החלקה לפעמים צוללת מעט מתחת לאפס בין גבעות — אז הקרקע מכסה את הכביש. לא נותנים לה לרדת */
     for (const p of this.points) p.y = Math.max(0, p.y);
 
-    this.tangents = this.points.map((_, i) => curve.getTangentAt(i / SAMPLES).setY(0).normalize());
+    this.tangents = this.points.map((_, i) => curve.getTangentAt(i / count).setY(0).normalize());
     /* שיפוע: כמה עולים לכל יחידה אופקית — מהגבהים אחרי התיקון, לא מהעקומה המקורית */
     this.slopes = this.points.map((_, i) =>
       (this.points[this.wrap(i + 1)].y - this.points[this.wrap(i - 1)].y) / (2 * this.spacing));
@@ -40,11 +42,11 @@ export class Track {
 
     const minY = def.bridge?.minY ?? Infinity;
     this.isBridge = this.points.map((p) => p.y >= minY);
-    this.isIce = new Array(SAMPLES).fill(false);
+    this.isIce = new Array(count).fill(false);
     for (const [a, b] of def.ice) {
-      for (let i = Math.floor(a * SAMPLES); i < b * SAMPLES; i++) this.isIce[this.wrap(i)] = true;
+      for (let i = Math.floor(a * count); i < b * count; i++) this.isIce[this.wrap(i)] = true;
     }
-    this.boosts = def.boosts.map(([f, lateral]) => ({ index: Math.floor(f * SAMPLES), lateral }));
+    this.boosts = def.boosts.map(([f, lateral]) => ({ index: Math.floor(f * count), lateral }));
 
     this.group = new THREE.Group();
   }
@@ -77,7 +79,8 @@ export class Track {
   /* כמה מקום פנוי יש בנקודה מסוימת (שלילי = על הכביש או על הסוללה) — לפיזור נוף */
   clearance(x, z) {
     let best = Infinity;
-    for (const p of this.points) {
+    for (let i = 0; i < this.count; i += 2) {
+      const p = this.points[i];
       const d = Math.hypot(p.x - x, p.z - z) - (WALL_OFFSET + 3 + p.y * EMBANK_SLOPE);
       if (d < best) best = d;
     }
@@ -124,9 +127,16 @@ export class Track {
   }
 
   buildGround() {
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), toon(this.theme.ground));
+    /* הקרקע מכסה את כל המסלול ועוד שוליים רחבים, לא משנה כמה הוא גדול */
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of this.points) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    }
+    const size = Math.max(maxX - minX, maxZ - minZ) + 1400;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), toon(this.theme.ground));
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(160, -0.15, 40);
+    ground.position.set((minX + maxX) / 2, -0.15, (minZ + maxZ) / 2);
     ground.receiveShadow = true;
     this.group.add(ground);
   }
@@ -223,7 +233,7 @@ export class Track {
         top.push(new THREE.Vector3(p.x + l.x * WALL_OFFSET * side, p.y + h, p.z + l.z * WALL_OFFSET * side));
       }
       const tube = new THREE.Mesh(
-        new THREE.TubeGeometry(new THREE.CatmullRomCurve3(top, true), this.count / step, 0.12, 4, true),
+        new THREE.TubeGeometry(new THREE.CatmullRomCurve3(top, true), Math.floor(this.count / step), 0.12, 4, true),
         new THREE.MeshBasicMaterial({ color: PALETTE.ink })
       );
       this.group.add(tube);

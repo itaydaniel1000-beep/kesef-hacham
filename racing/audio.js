@@ -115,6 +115,14 @@ export class GameAudio {
     this.sfx.gain.setTargetAtTime(sfx, this.ctx.currentTime, 0.05);
   }
 
+  /* מטבע: שני צלצולים קצרים ועולים */
+  coin() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(1318, t, 0.07, { type: "square", gain: 0.05 });
+    this.tone(1976, t + 0.06, 0.16, { type: "square", gain: 0.05 });
+  }
+
   /* רעם: רעש נמוך ומתגלגל */
   thunder() {
     if (!this.ctx) return;

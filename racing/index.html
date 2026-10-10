@@ -21,7 +21,7 @@
   <div id="hud" class="hidden">
     <div class="hud-row">
       <div class="chip chip-place"><small>מקום</small><strong id="hudPlace">9/9</strong></div>
-      <div class="chip"><small>מסלול</small><strong id="hudLap">0%</strong></div>
+      <div class="chip"><small id="hudLapLabel">מסלול</small><strong id="hudLap">0%</strong></div>
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
       <div class="hud-buttons">
         <button id="pauseButton" class="chip chip-button" aria-label="השהיה">⏸</button>
@@ -80,8 +80,17 @@
         </div>
       </div>
 
+      <div class="profile-bar">
+        <span id="pfLevel" class="pf-level">רמה 1</span>
+        <div class="xp-bar" title="XP"><div id="pfXp"></div></div>
+        <span id="pfCoins" class="pf-coins">0</span>
+        <button id="shopButton" class="mp-button" type="button">חנות</button>
+        <button id="dailyButton" class="mp-button" type="button">אתגרים יומיים</button>
+      </div>
+
       <h2>מסלול</h2>
       <div id="trackPicker" class="picker picker-tracks"></div>
+      <p id="recordLine" class="record-line"></p>
 
       <h2>מכונית</h2>
       <div id="carPicker" class="picker picker-cars"></div>
@@ -94,6 +103,13 @@
         <div>
           <h2>קושי</h2>
           <div id="levelPicker" class="segmented"></div>
+          <h2>הקפות</h2>
+          <div id="lapsPicker" class="segmented"></div>
+          <h2>מצב</h2>
+          <div id="modePicker" class="segmented">
+            <button type="button" data-id="race">מירוץ</button>
+            <button type="button" data-id="trial">נגד השעון</button>
+          </div>
         </div>
       </div>
 
@@ -145,6 +161,31 @@
         <label class="setting setting-row touch-only-flex"><input id="setVibrate" type="checkbox"> רטט בהתנגשויות</label>
       </div>
       <button id="settingsClose" class="primary-button" type="button">סגירה</button>
+    </div>
+  </div>
+
+  <!-- ===== חנות ===== -->
+  <div id="shop" class="overlay hidden">
+    <div class="card card-wide">
+      <h1>חנות</h1>
+      <p class="lead">יש לך <b id="shopCoins">0</b> מטבעות. השינויים חלים על המכונית שלך.</p>
+      <h2>גימור צבע</h2>
+      <div id="shopFinishes" class="shop-grid"></div>
+      <h2>ניאון מתחת למכונית</h2>
+      <div id="shopGlows" class="shop-grid"></div>
+      <h2>ספוילר</h2>
+      <div id="shopSpoiler" class="shop-grid"></div>
+      <button id="shopClose" class="primary-button" type="button">חזרה למוסך</button>
+    </div>
+  </div>
+
+  <!-- ===== אתגרים יומיים ===== -->
+  <div id="daily" class="overlay hidden">
+    <div class="card">
+      <h1>אתגרים יומיים</h1>
+      <p class="lead">כל אתגר שווה 150 מטבעות ו-100 XP. מתחלפים כל יום.</p>
+      <ul id="dailyList" class="daily-list"></ul>
+      <button id="dailyClose" class="primary-button" type="button">חזרה למוסך</button>
     </div>
   </div>
 
@@ -219,6 +260,7 @@
       <h1 id="resultTitle">סיימת!</h1>
       <ol id="resultList" class="results"></ol>
       <p id="bestLap" class="lead"></p>
+      <div id="rewards" class="rewards"></div>
       <div class="button-row">
         <button id="againButton" class="primary-button">עוד מירוץ</button>
         <button id="garageButton" class="secondary-button">למוסך</button>

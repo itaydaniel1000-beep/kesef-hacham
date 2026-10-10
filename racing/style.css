@@ -830,3 +830,38 @@ body.touch .touch-only-flex { display: flex; }
 /* גלגל המזל מסתובב */
 .item-slot.rolling { border-color: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, .25), 0 14px 40px rgba(0, 0, 0, .45); }
 .item-slot.rolling .item-icon { filter: blur(.4px); }
+
+/* ===== התקדמות: רמה, XP, מטבעות ===== */
+.profile-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; }
+.pf-level { font-family: var(--f-display); font-weight: 800; }
+.xp-bar { flex: 1; min-width: 90px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+#pfXp { height: 100%; width: 0; background: linear-gradient(90deg, #00b4ff, #7ae0ff); }
+.pf-coins { font-family: var(--f-display); font-weight: 800; color: #ffc83a; }
+.pf-coins::before { content: "● "; }
+.record-line { margin: 6px 0 0; color: var(--ink-soft); font-weight: 700; min-height: 1.2em; }
+.profile-bar .mp-button { padding: 6px 12px; font-size: .85rem; }
+.pick.locked { opacity: .55; }
+.pick.locked strong::before { content: "🔒 "; }
+.pick .lock-text { display: block; font-size: .78rem; color: var(--ink-soft); margin-top: 4px; }
+
+/* חנות */
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.shop-item { display: grid; gap: 6px; padding: 12px; border-radius: var(--radius); border: 1px solid var(--line); background: rgba(255, 255, 255, .04); text-align: center; }
+.shop-item.equipped { border-color: var(--brand); background: var(--brand-soft); }
+.shop-item strong { font-family: var(--f-display); }
+.shop-item .swatch-big { height: 28px; border-radius: 8px; }
+.shop-item button { font: inherit; font-weight: 800; padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255, 255, 255, .08); color: var(--ink); cursor: pointer; }
+.shop-item button:disabled { opacity: .45; cursor: default; }
+#shop .primary-button, #daily .primary-button { width: 100%; margin-top: 12px; }
+
+/* אתגרים */
+.daily-list { list-style: none; padding: 0; display: grid; gap: 10px; margin: 14px 0; text-align: right; }
+.daily-list li { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--line); background: rgba(255, 255, 255, .04); font-weight: 700; }
+.daily-list li.done { border-color: #2ecc71; background: rgba(46, 204, 113, .15); }
+.daily-list li.done::before { content: "✓ "; color: #2ecc71; }
+
+/* פרסים בסוף מירוץ */
+.rewards { display: grid; gap: 4px; margin: 6px 0 12px; font-weight: 700; }
+.rewards .big { font-family: var(--f-display); font-size: 1.2rem; color: #ffc83a; }
+.rewards .record { color: #7ae0ff; }
+.rewards .levelup { color: #2ecc71; font-family: var(--f-display); font-size: 1.2rem; }

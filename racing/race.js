@@ -1,11 +1,12 @@
 /* ===== מעקב המירוץ: הקפות, מקומות וזמנים ===== */
 
-/* הקפה אחת על מסלול ארוך */
+/* ברירת מחדל: הקפה אחת על מסלול ארוך (במוסך אפשר לבחור עד 5) */
 export const LAPS = 1;
 
 export class Race {
-  constructor(track, cars, player) {
+  constructor(track, cars, player, laps = LAPS) {
     this.track = track;
+    this.laps = laps;
     this.cars = cars;
     this.player = player;
     this.time = 0;
@@ -17,7 +18,7 @@ export class Race {
     const n = this.track.count;
     for (const car of this.cars) {
       if (car.finished) continue;
-      if (car.distance >= n * LAPS) {
+      if (car.distance >= n * this.laps) {
         car.finished = true;
         car.finishTime = this.time;
       }
@@ -37,16 +38,21 @@ export class Race {
     return this.standings().indexOf(car) + 1;
   }
 
+  /* באיזו הקפה המכונית נמצאת (1 עד laps) */
+  lapOf(car) {
+    return Math.min(this.laps, Math.max(1, Math.floor(car.distance / this.track.count) + 1));
+  }
+
   /* כמה מהמירוץ עבר, מ-0 עד 1 */
   progress(car) {
     if (car.finished) return 1;
-    return Math.min(1, Math.max(0, car.distance / (this.track.count * LAPS)));
+    return Math.min(1, Math.max(0, car.distance / (this.track.count * this.laps)));
   }
 
   /* זמן משוער למי שעוד לא סיים: לפי הקצב הממוצע שלו עד עכשיו */
   projectedTime(car) {
     if (car.finished) return car.finishTime;
-    const total = this.track.count * LAPS;
+    const total = this.track.count * this.laps;
     const done = Math.max(total * 0.05, car.distance); // מי שכמעט לא זז — בלי זמן הזוי
     return this.time * (total / done);
   }

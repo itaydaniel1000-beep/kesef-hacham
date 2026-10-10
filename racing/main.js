@@ -5,11 +5,16 @@ import { Sky } from "three/addons/objects/Sky.js";
 import { PALETTE } from "./toon.js";
 import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
-import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
+import { Car, CAR_TYPES, BASE_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
 import { ItemSystem, ITEMS, ROLL_TIME } from "./items.js";
 import { Room } from "./net.js";
 import { Skids } from "./skids.js";
+import { Coins } from "./coins.js";
+import {
+  profile, saveProfile, levelInfo, FINISHES, GLOWS, SPOILER_PRICE, buy, isUnlocked, UNLOCKS,
+  dailyChallenges, finishRace, recordOf, saveGhost, loadGhost
+} from "./profile.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -51,7 +56,7 @@ const LEVELS = {
 
 const settings = {
   track: "forest", type: "grip", color: COLORS[0].color, level: "normal", muted: false, music: true,
-  musicVol: 100, sfxVol: 100, steer: 100, quality: "auto", autoLevel: null, vibrate: true
+  musicVol: 100, sfxVol: 100, steer: 100, quality: "auto", autoLevel: null, vibrate: true, laps: 1, mode: "race"
 };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem("racing-settings") || "{}"));
@@ -61,10 +66,13 @@ try {
 settings.track = findTrack(settings.track).id;
 /* ?track= בוחר מסלול לביקור הזה בלבד — לא נשמר כברירת מחדל */
 let currentTrackId = findTrack(params.get("track") || settings.track).id;
-if (!CAR_TYPES[settings.type]) settings.type = "grip";
+if (!CAR_TYPES[settings.type] || !isUnlocked(settings.type)) settings.type = "grip";
+if (!["race", "trial"].includes(settings.mode)) settings.mode = "race";
 if (!LEVELS[settings.level]) settings.level = "normal";
 if (!COLORS.some((c) => c.color === settings.color)) settings.color = COLORS[0].color;
 if (!["auto", "low", "medium", "high"].includes(settings.quality)) settings.quality = "auto";
+settings.laps = Math.min(5, Math.max(1, Math.round(Number(settings.laps) || 1)));
+let raceLaps = settings.laps; // במולטיפלייר המארח קובע
 
 function saveSettings() {
   try {
@@ -178,6 +186,18 @@ let track = null;
 /* קופסאות הפתעה: מערכת אחת לכל מסלול */
 const itemSystems = new Map();
 let items = null;
+const coinSystems = new Map(); // מטבעות על המסלול: אחד לכל מסלול
+let coins = null;
+
+/* ===== נתוני המירוץ של השחקן (לאתגרים היומיים) והרוח של נגד השעון ===== */
+let stats = null;
+let wasDrifting = false;
+let rewards = null;
+const ghostRec = { samples: [], timer: 0 };
+let ghost = null;          // { car, data } — המכונית השקופה שנוהגת את השיא שלך
+function newStats() {
+  return { wallHits: 0, drifts: 0, itemsUsed: 0, missileHits: 0, minesHit: 0, coins: 0, nitroTime: 0 };
+}
 
 function useTrack(id) {
   const next = trackData.get(findTrack(id).id);
@@ -193,6 +213,8 @@ function useTrack(id) {
     itemSystems.set(track, sys);
   }
   items = itemSystems.get(track);
+  if (!coinSystems.has(track)) coinSystems.set(track, new Coins(track));
+  coins = coinSystems.get(track);
   const th = track.theme;
   const u = sky.material.uniforms;
   u.turbidity.value = th.turbidity;
@@ -221,6 +243,12 @@ let cars = [];
 let autopilot = null;
 let cooldownDriver = null;
 
+/* מה שקנית בחנות — רק על המכונית שלך */
+function myLook() {
+  const glow = GLOWS.find((g) => g.id === profile.glow);
+  return { finish: profile.finish, glow: glow ? glow.color : null, spoiler: profile.spoiler };
+}
+
 function buildCars(roster = null) {
   for (const car of cars) {
     scene.remove(car.mesh);
@@ -230,9 +258,20 @@ function buildCars(roster = null) {
   if (roster) return buildRosterCars(roster);
   const level = LEVELS[settings.level];
   const mine = COLORS.find((c) => c.color === settings.color);
-  player = new Car({ name: "אני", color: mine.color, type: settings.type, detail: 1e6 });
+  player = new Car({ name: "אני", color: mine.color, type: settings.type, detail: 1e6, ...myLook() });
   player.brakeDrifts = true;
   player.turnScale = settings.steer / 100;
+  /* נגד השעון: רק אתה (ורוח של השיא שלך) */
+  if (settings.mode === "trial") {
+    rivals = [];
+    drivers = [];
+    autopilot = AUTOPILOT ? new Driver(player, { skill: 0.88 }) : null;
+    cooldownDriver = new Driver(player);
+    cars = [player];
+    scene.add(player.mesh);
+    gridUp();
+    return;
+  }
   /* היריבים מקבלים את הצבעים שלא בחרת. כל אחד מעט שונה: סוג מכונית, מהירות, נטייה בקו ואומץ בפניות */
   const others = COLORS.filter((c) => c !== mine);
   const types = ["speed", "grip", "accel"];
@@ -335,6 +374,7 @@ function buildGarage() {
       settings.track = currentTrackId = def.id;
       saveSettings();
       markSelected(tp, (b) => b.dataset.id === def.id);
+      refreshRecords();
       useTrack(def.id);
       gridUp();
     });
@@ -353,7 +393,12 @@ function buildGarage() {
       stats.appendChild(el("div", "stat", `<span>${labels[k]}</span><span class="stat-bar">${bar}</span>`));
     }
     btn.append(el("strong", null, spec.name), stats);
+    if (!isUnlocked(id)) {
+      btn.classList.add("locked");
+      btn.append(el("small", "lock-text", UNLOCKS[id].text));
+    }
     btn.addEventListener("click", () => {
+      if (!isUnlocked(id)) return;
       settings.type = id;
       saveSettings();
       markSelected(cp, (b) => b.dataset.id === id);
@@ -392,6 +437,46 @@ function buildGarage() {
     lp.appendChild(btn);
   }
   markSelected(lp, (b) => b.dataset.id === settings.level);
+
+  const lapsP = $("lapsPicker");
+  for (let n = 1; n <= 5; n++) {
+    const btn = el("button", null, String(n));
+    btn.dataset.id = String(n);
+    btn.addEventListener("click", () => {
+      settings.laps = n;
+      saveSettings();
+      markSelected(lapsP, (b) => b.dataset.id === String(n));
+      refreshRecords?.();
+    });
+    lapsP.appendChild(btn);
+  }
+  markSelected(lapsP, (b) => b.dataset.id === String(settings.laps));
+
+  const mp = $("modePicker");
+  for (const btn of mp.querySelectorAll("button")) {
+    btn.addEventListener("click", () => {
+      settings.mode = btn.dataset.id;
+      saveSettings();
+      markSelected(mp, (b) => b === btn);
+      buildCars();
+    });
+  }
+  markSelected(mp, (b) => b.dataset.id === settings.mode);
+  refreshProfile();
+}
+
+/* ===== מוסך: רמה, XP, מטבעות ושיא ===== */
+function refreshProfile() {
+  const info = levelInfo();
+  $("pfLevel").textContent = `רמה ${info.level}`;
+  $("pfXp").style.width = `${Math.round((info.into / info.need) * 100)}%`;
+  $("pfCoins").textContent = profile.coins;
+  refreshRecords();
+}
+function refreshRecords() {
+  const rec = recordOf(currentTrackId, settings.laps);
+  const def = TRACKS.find((t) => t.id === currentTrackId);
+  $("recordLine").textContent = rec ? `השיא שלך ב${def.name} (${settings.laps === 1 ? "הקפה אחת" : `${settings.laps} הקפות`}): ${formatTime(rec)}` : "";
 }
 
 /* ---------- קלט וממשק ---------- */
@@ -426,9 +511,17 @@ function startRace() {
     d?.reset();
     d?.prepare(track);
   }
-  race = new Race(track, cars, player);
+  race = new Race(track, cars, player, mpRoster ? raceLaps : settings.laps);
   items.reset(cars);
   items.net = mpRoster ? itemNet : null;
+  items.enabled = settings.mode !== "trial" || !!mpRoster;
+  coins.reset();
+  stats = newStats();
+  wasDrifting = false;
+  rewards = null;
+  ghostRec.samples = [];
+  ghostRec.timer = 0;
+  setupGhost();
   Object.assign(fpsProbe, { frames: 0, time: 0, done: false });
   skids.clear();
   netTimer = 0;
@@ -457,6 +550,8 @@ function syncAudio() {
 
 function toGarage() {
   state = "menu";
+  refreshProfile();
+  if (ghost) ghost.car.mesh.visible = false;
   pausedFrom = null;
   gridUp();
   syncAudio();
@@ -525,7 +620,7 @@ addEventListener("keydown", (e) => {
   /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
   /* על "למוסך" או על "איך נוהגים?" Enter עושה את מה שהם עושים — לא מתחיל מירוץ */
   if (e.target instanceof Element && e.target.closest("#garageButton, summary")) return;
-  if (e.code === "Enter" && !mpRoster && $("mp").classList.contains("hidden") && $("settingsPanel").classList.contains("hidden") && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
+  if (e.code === "Enter" && !mpRoster && $("mp").classList.contains("hidden") && $("settingsPanel").classList.contains("hidden") && $("shop").classList.contains("hidden") && $("daily").classList.contains("hidden") && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
     e.preventDefault();
     startRace();
   }
@@ -612,7 +707,10 @@ function spinRoulette() {
 
 function updateHud() {
   hudSet("place", `${race.placeOf(player)}/${cars.length}`, (v) => (hud.place.textContent = v));
-  hudSet("lap", `${Math.floor(race.progress(player) * 100)}%`, (v) => (hud.lap.textContent = v));
+  /* הקפה אחת: אחוז מהמסלול. כמה הקפות: "2/3" */
+  const lapText = race.laps > 1 ? `${race.lapOf(player)}/${race.laps}` : `${Math.floor(race.progress(player) * 100)}%`;
+  hudSet("lap", lapText, (v) => (hud.lap.textContent = v));
+  hudSet("lapLabel", race.laps > 1 ? "הקפה" : "מסלול", (v) => ($("hudLapLabel").textContent = v));
   hudSet("time", formatTime(player.finished ? player.finishTime : race.time), (v) => (hud.time.textContent = v));
   hudSet("speed", Math.round(Math.abs(player.speed) * 4.2), (v) => (hud.speed.textContent = v));
   hudSet("nitro", Math.round(player.nitro * 100), (v) => (hud.nitroFill.style.width = `${v}%`));
@@ -641,7 +739,7 @@ function showResults() {
   $("againButton").textContent = !mpRoster ? "עוד מירוץ" : lobby.public ? "משחק רנדומלי נוסף" : "חזרה לחדר";
   const place = race.placeOf(player);
   const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
-  $("resultTitle").textContent = titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
+  $("resultTitle").textContent = cars.length === 1 ? "סיימת!" : titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
   $("resultBadge").textContent = ["🏆", "🥈", "🥉"][place - 1] || "🏁";
   const list = $("resultList");
   list.innerHTML = "";
@@ -657,6 +755,7 @@ function showResults() {
     list.appendChild(li);
   });
   $("bestLap").textContent = player.finished ? `הזמן שלך: ${formatTime(player.finishTime)}` : "";
+  showRewards();
   show("results", true);
   show("touch", false);
 }
@@ -721,7 +820,11 @@ function rearOf(car, side) {
 }
 
 /* קול ואפקטים של הפריטים */
-function itemEffect(kind, car, pos) {
+function itemEffect(kind, car, pos, source) {
+  if (stats && car === player) {
+    if (kind === "boom" && source !== "missile") stats.minesHit++;
+    if (kind === "missileHit") stats.missileHits++;
+  }
   const mine = car === player;
   const near = mine || Math.hypot(car.x - camera.position.x, car.z - camera.position.z) < 80;
   if (kind === "boom" && !car.remote) car.damage = Math.min(1, car.damage + 0.12);
@@ -782,6 +885,7 @@ function effects(dt) {
     for (const ev of car.events) {
       /* נזק ויזואלי: כל מכה מוסיפה קצת, לפי סוג המכה */
       if (!car.remote && (ev === "wall" || ev === "bump")) car.damage = Math.min(1, car.damage + (ev === "wall" ? 0.05 : 0.025));
+      if (car === player && ev === "wall" && stats) stats.wallHits++;
       if (car === player) {
         if (ev === "wall") vibrate(60);
         else if (ev === "bump") vibrate(35);
@@ -969,7 +1073,7 @@ function step(dt) {
   } else {
     player.brakeDrifts = isTouch; // בטלפון אין מקש דריפט — שם בלם+היגוי מחליק; במקלדת יש רווח
     Object.assign(player.input, input.read());
-    if (input.takeItem()) items.use(player);
+    if (input.takeItem() && items.use(player)) stats.itemsUsed++;
   }
   for (const d of drivers) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
@@ -988,8 +1092,33 @@ function step(dt) {
   resolveCollisions(cars);
   if (mpRoster) netTick(dt);
   items.update(dt, cars, true);
+  const got = coins.update(dt, player, items.enabled);
+  if (got) {
+    stats.coins += got;
+    audio.coin();
+  }
+  if (!player.finished) {
+    if (player.drifting && !wasDrifting) stats.drifts++;
+    wasDrifting = player.drifting;
+    if (player.nitroOn) stats.nitroTime += dt;
+    /* הקלטה לרוח: כל 0.1 שנייה */
+    ghostRec.timer += dt;
+    if (ghostRec.timer >= 0.1) {
+      ghostRec.timer -= 0.1;
+      ghostRec.samples.push([player.x, player.y, player.z, player.heading]);
+    }
+  }
+  driveGhost();
   race.update(dt);
 
+  if (player.finished && state === "race" && !rewards) {
+    const mode = mpRoster ? "race" : settings.mode;
+    rewards = finishRace({
+      place: race.placeOf(player), finished: true, stats, track: track.def.id, laps: race.laps,
+      level: settings.level, mode, time: player.finishTime
+    });
+    if (rewards.newRecord && mode === "trial") saveGhost(track.def.id, race.laps, ghostRec.samples);
+  }
   if (player.finished && state === "race") {
     state = "finished";
     show("touch", false); // מעכשיו המחשב נוהג — הכפתורים כבר לא עושים כלום
@@ -1098,7 +1227,7 @@ function buildRosterCars(roster) {
   drivers = [];
   roster.forEach((e, i) => {
     const mine = e.id === room.myId;
-    const car = new Car({ name: e.name, color: e.color, type: e.type, detail: mine ? 1e6 : quality.detail });
+    const car = new Car({ name: e.name, color: e.color, type: e.type, detail: mine ? 1e6 : quality.detail, ...(mine ? myLook() : {}) });
     car.netId = e.id;
     if (mine) {
       player = car;
@@ -1206,7 +1335,9 @@ function renderLobby() {
     li.append(el("span", "pos", String(i + 1)));
     const sw = el("span", "swatch");
     sw.style.background = hex(p.color);
-    li.append(sw, el("span", "name", p.name));
+    const name = el("span", "name");
+    name.textContent = p.name; // שם שמגיע מהרשת — רק כטקסט, אף פעם לא כ-HTML
+    li.append(sw, name);
     if (p.id === "host") li.querySelector(".name").append(el("span", "tag", "(מארח)"));
     list.append(li);
   });
@@ -1353,7 +1484,7 @@ function hostStart() {
   if (lobby.bots) {
     const used = new Set(humans.map((p) => p.color));
     const free = COLORS.filter((c) => !used.has(c.color));
-    const types = Object.keys(CAR_TYPES);
+    const types = BASE_TYPES;
     for (let i = 0; roster.length < MAX_CARS; i++) {
       const c = free[i % free.length] || COLORS[i % COLORS.length];
       roster.push({ id: `bot${i}`, name: c.name, color: c.color, type: types[Math.floor(Math.random() * types.length)], bot: true });
@@ -1361,13 +1492,14 @@ function hostStart() {
   }
   /* השחקנים בהתחלה מפוזרים בין הבוטים — כולם מתחילים מאחור, כמו במשחק רגיל */
   roster.reverse();
-  const msg = { t: "start", track: lobby.track, level: settings.level, roster };
+  const msg = { t: "start", track: lobby.track, level: settings.level, laps: settings.laps, roster };
   room.broadcast(msg);
   startMultiplayer(msg);
 }
 
 function startMultiplayer(msg) {
   mpRoster = msg.roster;
+  raceLaps = msg.laps || 1;
   latestStates.clear();
   settings.track = currentTrackId = msg.track;
   useTrack(msg.track);
@@ -1505,6 +1637,130 @@ function loadingStep(promise, label) {
 let loadingDone = 0;
 const loadingTotal = 4;
 
+/* ===== רוח (נגד השעון): מכונית שקופה שנוהגת את השיא שלך ===== */
+function setupGhost() {
+  if (ghost) {
+    scene.remove(ghost.car.mesh);
+    ghost.car.dispose();
+    ghost = null;
+  }
+  if (settings.mode !== "trial" || mpRoster) return;
+  const data = loadGhost(track.def.id, settings.laps);
+  if (!data || data.length < 8) return;
+  const car = new Car({ name: "רוח", color: settings.color, type: settings.type, detail: 1e6 });
+  car.mesh.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = [].concat(o.material).map((m) => {
+      const c = m.clone();
+      c.transparent = true;
+      c.opacity = 0.32;
+      c.depthWrite = false;
+      return c;
+    });
+    if (o.material.length === 1) o.material = o.material[0];
+    o.castShadow = false;
+  });
+  scene.add(car.mesh);
+  ghost = { car, data };
+  driveGhost();
+}
+function driveGhost() {
+  if (!ghost) return;
+  const d = ghost.data, n = d.length / 4;
+  const t = Math.max(0, race ? race.time : 0) / 0.1;
+  const i = Math.min(n - 1, Math.floor(t)), j = Math.min(n - 1, i + 1), f = t - Math.floor(t);
+  const g = ghost.car;
+  g.x = d[i * 4] + (d[j * 4] - d[i * 4]) * f;
+  g.y = d[i * 4 + 1] + (d[j * 4 + 1] - d[i * 4 + 1]) * f;
+  g.z = d[i * 4 + 2] + (d[j * 4 + 2] - d[i * 4 + 2]) * f;
+  g.heading = d[i * 4 + 3] + angleDelta(d[j * 4 + 3], d[i * 4 + 3]) * f;
+  g.mesh.position.set(g.x, g.y + 0.14, g.z);
+  g.mesh.rotation.y = g.heading;
+  g.mesh.visible = state !== "menu";
+}
+const angleDelta = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+/* ===== מסך התוצאות: מטבעות, XP, שיא ואתגרים ===== */
+function showRewards() {
+  const box = $("rewards");
+  box.innerHTML = "";
+  if (!rewards) return;
+  box.append(el("div", "big", `+${rewards.coins} מטבעות · +${rewards.xp} XP`));
+  if (rewards.newRecord) box.append(el("div", "record", "שיא חדש!"));
+  for (const c of rewards.completed) box.append(el("div", null, `אתגר הושלם: ${c}`));
+  if (rewards.levelUp) box.append(el("div", "levelup", `עלית לרמה ${rewards.levelUp}!`));
+}
+
+/* ===== חנות ===== */
+function openShop() {
+  renderShop();
+  show("menu", false);
+  show("shop", true);
+}
+function shopItem(name, swatch, price, owned, equipped, onBuy, onEquip) {
+  const box = el("div", "shop-item" + (equipped ? " equipped" : ""));
+  const sw = el("div", "swatch-big");
+  sw.style.background = swatch;
+  const btn = el("button", null, equipped ? "בשימוש" : owned ? "לבחור" : `${price} מטבעות`);
+  btn.type = "button";
+  btn.disabled = equipped || (!owned && profile.coins < price);
+  btn.addEventListener("click", () => {
+    if (owned) onEquip();
+    else onBuy();
+    saveProfile();
+    renderShop();
+    buildCars();
+  });
+  box.append(sw, el("strong", null, name), btn);
+  return box;
+}
+function renderShop() {
+  $("shopCoins").textContent = profile.coins;
+  const swatches = {
+    metal: hex(settings.color), matte: "#4a4d52", gold: "linear-gradient(135deg,#f7d774,#b8860b)",
+    chrome: "linear-gradient(135deg,#ffffff,#8a9099)", rainbow: "linear-gradient(90deg,red,orange,yellow,lime,cyan,blue,magenta)"
+  };
+  const fin = $("shopFinishes");
+  fin.innerHTML = "";
+  for (const f of FINISHES) {
+    fin.append(shopItem(f.name, swatches[f.id], f.price, profile.owned.includes(f.id), profile.finish === f.id,
+      () => buy("finish", f.id), () => (profile.finish = f.id)));
+  }
+  const gl = $("shopGlows");
+  gl.innerHTML = "";
+  gl.append(shopItem("בלי", "#20242c", 0, true, !profile.glow, null, () => (profile.glow = null)));
+  for (const g of GLOWS) {
+    gl.append(shopItem(g.name, hex(g.color), g.price, profile.glows.includes(g.id), profile.glow === g.id,
+      () => buy("glow", g.id), () => (profile.glow = g.id)));
+  }
+  const sp = $("shopSpoiler");
+  sp.innerHTML = "";
+  sp.append(shopItem("בלי", "#20242c", 0, true, !profile.spoiler, null, () => (profile.spoiler = false)));
+  sp.append(shopItem("כנף פחמן", "linear-gradient(135deg,#2b2e34,#0d0e10)", SPOILER_PRICE, profile.spoilerOwned, profile.spoiler,
+    () => buy("spoiler"), () => (profile.spoiler = true)));
+}
+$("shopButton").addEventListener("click", openShop);
+$("shopClose").addEventListener("click", () => {
+  show("shop", false);
+  show("menu", true);
+  refreshProfile();
+});
+
+/* ===== אתגרים יומיים ===== */
+function openDaily() {
+  const list = $("dailyList");
+  list.innerHTML = "";
+  for (const c of dailyChallenges()) list.append(el("li", c.done ? "done" : null, c.text));
+  saveProfile();
+  show("menu", false);
+  show("daily", true);
+}
+$("dailyButton").addEventListener("click", openDaily);
+$("dailyClose").addEventListener("click", () => {
+  show("daily", false);
+  show("menu", true);
+});
+
 /* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */
 const startButton = $("startButton");
 const startLabel = startButton.textContent;
@@ -1539,6 +1795,10 @@ window.__race = {
   get track() { return track; },
   get items() { return items; },
   skids,
+  profile,
+  get rewards() { return rewards; },
+  get ghost() { return ghost; },
+  get coins() { return coins; },
   audio,
   renderer,
   scene,

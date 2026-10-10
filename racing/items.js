@@ -74,6 +74,7 @@ export class ItemSystem {
     this.net = null;    // מולטיפלייר: main.js מחבר לכאן שליחת אירועים (קופסה, מוקש, פגיעה)
     this.mineCounter = 0;
     this.missiles = [];
+    this.enabled = true; // נגד השעון: בלי קופסאות
 
     /* שורות של שלוש קופסאות לרוחב הכביש, מפוזרות לאורך המסלול (לא על הזינוק, לא על משטחי האצה או קרח) */
     const rows = 8;
@@ -131,7 +132,8 @@ export class ItemSystem {
     for (const m of this.mines) {
       m.light.material.color.setHex(Math.sin(this.time * 10) > 0 ? 0xff2a1a : 0x330000);
     }
-    if (!racing) return;
+    this.group.visible = this.enabled;
+    if (!racing || !this.enabled) return;
 
     this.updateMissiles(dt, cars);
     for (const car of cars) {
@@ -278,7 +280,7 @@ export class ItemSystem {
       this.placeMissile(m);
       if (m.target && !m.target.remote && !m.target.finished && m.dist >= m.target.distance - 0.5 && Math.abs(m.lateral - m.target.lateral) < 3) {
         m.hit = true;
-        this.hitMissile(m.target, m.mesh.position);
+        this.hitMissile(m.target, m.mesh.position, m.owner);
         this.net?.missileHit(m.id);
       }
       if (m.life <= 0) m.hit = true;
@@ -287,11 +289,12 @@ export class ItemSystem {
     this.missiles = this.missiles.filter((m) => !m.hit);
   }
 
-  hitMissile(car, pos) {
+  hitMissile(car, pos, owner) {
     car.stun = STUN;
     car.speed *= 0.3;
     car.drifting = false;
-    this.fx("boom", car, pos.clone());
+    this.fx("boom", car, pos.clone(), "missile");
+    if (owner) this.fx("missileHit", owner);
   }
 
   removeMissile(id) {

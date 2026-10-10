@@ -26,8 +26,20 @@ export const CAR_TYPES = {
     name: "תאוצה", maxSpeed: 44.5, accel: 25, turn: 1.95, grip: 10,
     stats: { speed: 2, accel: 3, grip: 2 },
     shape: { len: 3.7, width: 2.1, height: 0.8, cabin: 1.6, wing: 0, wingY: 0 }
+  },
+  /* נפתחות בהישגים (profile.js). בינתיים עם הדגמים של המהירה ושל התאוצה */
+  super: {
+    name: "מירוץ על", maxSpeed: 48, accel: 22, turn: 2.0, grip: 11, model: "speed",
+    stats: { speed: 3, accel: 3, grip: 2 },
+    shape: { len: 4.6, width: 2.05, height: 0.6, cabin: 1.7, wing: 2.4, wingY: 1.5 }
+  },
+  turbo: {
+    name: "טורבו", maxSpeed: 47, accel: 19, turn: 2.25, grip: 13, model: "accel",
+    stats: { speed: 3, accel: 2, grip: 3 },
+    shape: { len: 3.9, width: 2.15, height: 0.8, cabin: 1.6, wing: 0, wingY: 0 }
   }
 };
+export const BASE_TYPES = ["speed", "grip", "accel"];
 
 const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.4, 20));
 const strutGeo = shared(new THREE.BoxGeometry(0.1, 0.45, 0.22));
@@ -98,11 +110,18 @@ async function loadMeshyCars(loader) {
 /* חומר צבע לכל סוג וצבע: פיקסלים צבעוניים בטקסטורה (הפח) מקבלים את הצבע שבחרת באותה בהירות יחסית;
    חלונות, צמיגים וכרום (אפורים/כהים) נשארים כמו שהם */
 /* כל מכונית מקבלת חומר משלה — כדי שהנזק (שריטות וכתמים) יהיה רק עליה. התוכנית של ה-shader משותפת */
-function meshyPaint(color, map, ref, damage) {
-  const m = new THREE.MeshPhysicalMaterial({ map, roughness: 0.38, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05 });
-  const paint = new THREE.Color(color); // three ממיר ללינארי
+const FINISH = {
+  metal: { roughness: 0.38, metalness: 0.35, clearcoat: 1 },
+  matte: { roughness: 0.85, metalness: 0.05, clearcoat: 0 },
+  gold: { roughness: 0.22, metalness: 1, clearcoat: 1, color: 0xd9a520 },
+  chrome: { roughness: 0.06, metalness: 1, clearcoat: 1, color: 0xe4e8ee },
+  rainbow: { roughness: 0.3, metalness: 0.5, clearcoat: 1 }
+};
+function meshyPaint(paint, map, ref, damage, finish = "metal") {
+  const f = FINISH[finish] || FINISH.metal;
+  const m = new THREE.MeshPhysicalMaterial({ map, roughness: f.roughness, metalness: f.metalness, clearcoat: f.clearcoat, clearcoatRoughness: 0.05 });
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.paintColor = { value: paint };
+    shader.uniforms.paintColor = paint;
     shader.uniforms.paintRef = { value: ref };
     shader.uniforms.damage = damage;
     shader.fragmentShader = "uniform vec3 paintColor;\nuniform float paintRef;\nuniform float damage;\n" + shader.fragmentShader.replace(
@@ -170,6 +189,23 @@ export async function loadCarModel() {
   realCar = { model, far, ao };
 }
 
+/* כתם אור רך (לניאון מתחת למכונית) */
+let glowTex = null;
+function glowTexture() {
+  if (glowTex) return glowTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, "rgba(255,255,255,.9)");
+  grad.addColorStop(0.5, "rgba(255,255,255,.35)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  glowTex = shared(new THREE.CanvasTexture(c));
+  return glowTex;
+}
+
 /* צבע מכונית: לכה עם שכבת ברק (clearcoat) — משקפת את השמיים */
 const paints = new Map();
 function paintMaterial(color) {
@@ -192,8 +228,11 @@ function profile(points, width, bevel) {
 }
 
 export class Car {
-  constructor({ name, color, type = "grip", speedScale = 1, detail = 45 }) {
-    this.detail = detail; // עד איזה מרחק מהמצלמה מציירים את הדגם המפורט
+  constructor({ name, color, type = "grip", speedScale = 1, detail = 45, finish = "metal", glow = null, spoiler = false }) {
+    this.detail = detail;
+    this.finish = finish;   // מהחנות: מטאלי / מט / זהב / כרום / קשת
+    this.glow = glow;       // צבע ניאון מתחת למכונית, או null
+    this.spoiler = spoiler; // עד איזה מרחק מהמצלמה מציירים את הדגם המפורט
     const spec = CAR_TYPES[type];
     this.name = name;
     this.color = color;
@@ -358,8 +397,10 @@ export class Car {
     this.realWheels = []; // בדגם של Meshy הגלגלים לא נפרדים
     this.realFront = [];
     this.realRadius = 1;
-    const spec = meshyCars[this.type];
+    const spec = meshyCars[CAR_TYPES[this.type].model || this.type];
     this.damageUniform = { value: 0 };
+    const f = FINISH[this.finish];
+    this.paintUniform = { value: new THREE.Color(f?.color ?? this.color) }; // three ממיר ללינארי
     const lod = new THREE.LOD();
     for (const [part, distance] of [[spec.near, 0], [spec.far, this.detail]]) {
       const size = part.box.getSize(new THREE.Vector3());
@@ -369,12 +410,37 @@ export class Car {
       real.position.y = -part.box.min.y * k + 0.02;
       real.traverse((o) => {
         if (!o.isMesh) return;
-        o.material = meshyPaint(this.color, part.mesh.material.map, spec.ref, this.damageUniform);
+        o.material = meshyPaint(this.paintUniform, part.mesh.material.map, spec.ref, this.damageUniform, this.finish);
         o.castShadow = true;
       });
       lod.addLevel(real, distance);
+      if (distance === 0) this.realTop = (part.box.max.y - part.box.min.y) * k;
     }
     body.add(lod);
+
+    /* ספוילר מהחנות: כנף פחמן על הגב */
+    if (this.spoiler) {
+      const y = this.realTop + 0.18, z = -s.len / 2 + 0.45;
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(s.width * 0.95, 0.07, 0.6), carbonMat);
+      wing.position.set(0, y, z);
+      wing.castShadow = true;
+      body.add(wing);
+      for (const side of [1, -1]) {
+        const strut = new THREE.Mesh(strutGeo, carbonMat);
+        strut.position.set(side * 0.55, y - 0.25, z + 0.05);
+        body.add(strut);
+      }
+    }
+    /* ניאון מתחת למכונית: כתם אור רך על הכביש */
+    if (this.glow !== null) {
+      const g = new THREE.Mesh(
+        new THREE.PlaneGeometry(s.width * 2.2, s.len * 1.5).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ map: glowTexture(), color: this.glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
+      );
+      g.position.y = 0.06;
+      g.renderOrder = 3;
+      car.add(g);
+    }
   }
 
   /* הדגם האמיתי מקרוב, והדגם הפשוט מרחוק (LOD) — תשע מכוניות מפורטות כבדות מדי לטלפון */
@@ -690,6 +756,7 @@ export class Car {
     const flaming = this.nitroOn || this.padBoost > 0.4;
     this.flames.visible = flaming;
     if (this.damageUniform) this.damageUniform.value = this.damage;
+    if (this.finish === "rainbow" && this.paintUniform) this.paintUniform.value.setHSL((performance.now() / 6000) % 1, 0.85, 0.5);
     this.tailMat.emissiveIntensity = this.input.brake > 0 && this.speed > 0.5 ? 3 : 0.6; // פנסי בלם
     if (flaming) {
       const f = 0.8 + Math.random() * 0.5;

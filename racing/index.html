@@ -15,6 +15,7 @@
 </head>
 <body>
   <canvas id="scene"></canvas>
+  <div id="speedlines"></div>
 
   <!-- ===== לוח מחוונים בזמן המירוץ ===== -->
   <div id="hud" class="hidden">
@@ -22,10 +23,20 @@
       <div class="chip chip-place"><small>מקום</small><strong id="hudPlace">4/4</strong></div>
       <div class="chip"><small>הקפה</small><strong id="hudLap">1/3</strong></div>
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
-      <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
+      <div class="hud-buttons">
+        <button id="musicButton" class="chip chip-button" aria-label="מוזיקה">🎵</button>
+        <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
+      </div>
     </div>
     <canvas id="minimap" width="150" height="150"></canvas>
-    <div class="speedo"><strong id="hudSpeed">0</strong><small>קמ״ש</small></div>
+    <div id="toast" class="toast"></div>
+    <div class="dash">
+      <div class="speedo"><strong id="hudSpeed">0</strong><small>קמ״ש</small></div>
+      <div class="nitro" title="ניטרו">
+        <span class="nitro-label">ניטרו</span>
+        <div class="nitro-bar"><div id="nitroFill"></div></div>
+      </div>
+    </div>
   </div>
 
   <!-- ===== כפתורי מגע ===== -->
@@ -36,24 +47,55 @@
     </div>
     <div class="touch-group touch-pedals">
       <button class="touch-btn touch-brake" data-key="brake">בלם</button>
-      <button class="touch-btn touch-gas" data-key="gas">גז</button>
+      <div class="touch-col">
+        <button class="touch-btn touch-nitro" data-key="nitro">טורבו</button>
+        <button class="touch-btn touch-gas" data-key="gas">גז</button>
+      </div>
     </div>
   </div>
 
   <div id="countdown" class="hidden"></div>
 
-  <!-- ===== מסך פתיחה ===== -->
+  <!-- ===== מוסך: בחירת מסלול, מכונית, צבע וקושי ===== -->
   <div id="menu" class="overlay">
-    <div class="card">
-      <div class="badge">🏁</div>
-      <h1>מירוץ תלת-ממד</h1>
-      <p class="lead">שלוש הקפות, שלושה יריבים. מי יגיע ראשון לקו?</p>
-      <ul class="howto">
-        <li><kbd>↑</kbd> / <kbd>W</kbd> גז</li>
-        <li><kbd>↓</kbd> / <kbd>S</kbd> בלם ורוורס</li>
-        <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> היגוי</li>
-        <li class="touch-only">בטלפון: כפתורים על המסך</li>
-      </ul>
+    <div class="card card-wide">
+      <div class="title-row">
+        <div class="badge">🏁</div>
+        <div>
+          <h1>מירוץ תלת-ממד</h1>
+          <p class="lead">שלוש הקפות, שלושה יריבים. מי יגיע ראשון לקו?</p>
+        </div>
+      </div>
+
+      <h2>מסלול</h2>
+      <div id="trackPicker" class="picker picker-tracks"></div>
+
+      <h2>מכונית</h2>
+      <div id="carPicker" class="picker picker-cars"></div>
+
+      <div class="split">
+        <div>
+          <h2>צבע</h2>
+          <div id="colorPicker" class="swatches"></div>
+        </div>
+        <div>
+          <h2>קושי</h2>
+          <div id="levelPicker" class="segmented"></div>
+        </div>
+      </div>
+
+      <details class="howto">
+        <summary>איך נוהגים?</summary>
+        <ul>
+          <li><kbd>↑</kbd> / <kbd>W</kbd> גז · <kbd>↓</kbd> / <kbd>S</kbd> בלם ורוורס</li>
+          <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> היגוי</li>
+          <li><kbd>רווח</kbd> דריפט — מחליקים בפנייה וממלאים ניטרו</li>
+          <li><kbd>Shift</kbd> / <kbd>N</kbd> ניטרו · חצים זהובים על הכביש = דחיפה</li>
+          <li>נסיעה צמוד מאחורי מכונית אחרת גם ממלאת ניטרו</li>
+          <li class="touch-only">בטלפון: בלם + היגוי במהירות = דריפט</li>
+        </ul>
+      </details>
+
       <button id="startButton" class="primary-button">יוצאים למירוץ</button>
     </div>
   </div>
@@ -65,7 +107,10 @@
       <h1 id="resultTitle">סיימת!</h1>
       <ol id="resultList" class="results"></ol>
       <p id="bestLap" class="lead"></p>
-      <button id="againButton" class="primary-button">עוד מירוץ</button>
+      <div class="button-row">
+        <button id="againButton" class="primary-button">עוד מירוץ</button>
+        <button id="garageButton" class="secondary-button">למוסך</button>
+      </div>
     </div>
   </div>
 

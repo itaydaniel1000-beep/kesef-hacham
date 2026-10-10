@@ -1,33 +1,47 @@
-/* ===== המסלול: עקומה סגורה, כביש, שוליים, קיר, עצים וקו סיום ===== */
+/* ===== המסלול: עקומה סגורה עם גובה, כביש, שוליים, קיר, סוללות, גשר וקו סיום ===== */
 
 import * as THREE from "three";
 import { PALETTE, toon, outlined } from "./toon.js";
+import { buildScenery } from "./scenery.js";
 
-export const ROAD_HALF = 7;          // חצי רוחב הכביש
+export const ROAD_HALF = 7;               // חצי רוחב הכביש
 export const WALL_OFFSET = ROAD_HALF + 7; // איפה עומד הקיר מהמרכז
 const SAMPLES = 900;
-
-/* נקודות הבקרה של המסלול (x, z). הנקודה הראשונה היא קו הסיום, והמכוניות נוסעות לכיוון +z */
-const CONTROL = [
-  [0, 0], [0, 110], [18, 175], [75, 205], [140, 180], [165, 120],
-  [220, 92], [282, 122], [325, 80], [312, 0], [262, -62], [185, -58],
-  [140, -18], [92, -70], [32, -86]
-];
+const EMBANK_SLOPE = 1.6;                 // כמה רחוק יוצאת הסוללה לכל יחידת גובה
 
 export class Track {
-  constructor() {
+  constructor(def) {
+    this.def = def;
+    this.theme = def.theme;
     const curve = new THREE.CatmullRomCurve3(
-      CONTROL.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+      def.control.map(([x, z, y = 0]) => new THREE.Vector3(x, y, z)),
       true,
       "centripetal"
     );
-    this.length = curve.getLength();
     this.count = SAMPLES;
     this.points = curve.getSpacedPoints(SAMPLES).slice(0, SAMPLES);
-    this.tangents = this.points.map((_, i) => curve.getTangentAt(i / SAMPLES).setY(0).normalize());
+    this.length = curve.getLength();
+    this.spacing = this.length / SAMPLES;
+
+    const full = this.points.map((_, i) => curve.getTangentAt(i / SAMPLES));
+    this.tangents = full.map((t) => t.clone().setY(0).normalize());
+    /* שיפוע: כמה עולים לכל יחידה אופקית */
+    this.slopes = full.map((t) => t.y / Math.max(0.001, Math.hypot(t.x, t.z)));
     /* שמאל ביחס לכיוון הנסיעה */
     this.lefts = this.tangents.map((t) => new THREE.Vector3(t.z, 0, -t.x));
     this.headings = this.tangents.map((t) => Math.atan2(t.x, t.z));
+    /* עקמומיות אנכית: כמה מהר השיפוע משתנה לאורך הדרך. שלילי חזק = פסגה חדה שאפשר לעוף ממנה */
+    this.vcurv = this.slopes.map((_, i) =>
+      (this.slopes[this.wrap(i + 3)] - this.slopes[this.wrap(i - 3)]) / (6 * this.spacing));
+
+    const minY = def.bridge?.minY ?? Infinity;
+    this.isBridge = this.points.map((p) => p.y >= minY);
+    this.isIce = new Array(SAMPLES).fill(false);
+    for (const [a, b] of def.ice) {
+      for (let i = Math.floor(a * SAMPLES); i < b * SAMPLES; i++) this.isIce[this.wrap(i)] = true;
+    }
+    this.boosts = def.boosts.map(([f, lateral]) => ({ index: Math.floor(f * SAMPLES), lateral }));
+
     this.group = new THREE.Group();
   }
 
@@ -35,7 +49,7 @@ export class Track {
     return ((i % this.count) + this.count) % this.count;
   }
 
-  /* הנקודה הקרובה ביותר על המסלול, חיפוש מקומי סביב רמז כדי שלא נקפוץ לקטע אחר של המסלול */
+  /* הנקודה הקרובה ביותר על המסלול. חיפוש מקומי סביב רמז, כך שגם בצומת של השמינייה לא קופצים לקטע השני */
   locate(x, z, hint, range = 40) {
     let best = hint;
     let bestD = Infinity;
@@ -47,15 +61,23 @@ export class Track {
     }
     const p = this.points[best];
     const l = this.lefts[best];
+    const t = this.tangents[best];
     const lateral = (x - p.x) * l.x + (z - p.z) * l.z;
-    return { index: best, lateral };
+    const along = (x - p.x) * t.x + (z - p.z) * t.z;
+    /* גובה הכביש בדיוק מתחת למכונית: אינטרפולציה לאורך הקטע לדגימה הבאה או הקודמת, כך שהגובה רציף */
+    const q = this.points[this.wrap(best + (along >= 0 ? 1 : -1))];
+    const height = p.y + (q.y - p.y) * Math.min(1, Math.abs(along) / this.spacing);
+    return { index: best, lateral, height };
   }
 
-  /* חיפוש מלא — רק לאתחול ולבדיקות פיזור עצים */
-  distanceToCenter(x, z) {
-    let bestD = Infinity;
-    for (const p of this.points) bestD = Math.min(bestD, (p.x - x) ** 2 + (p.z - z) ** 2);
-    return Math.sqrt(bestD);
+  /* כמה מקום פנוי יש בנקודה מסוימת (שלילי = על הכביש או על הסוללה) — לפיזור נוף */
+  clearance(x, z) {
+    let best = Infinity;
+    for (const p of this.points) {
+      const d = Math.hypot(p.x - x, p.z - z) - (WALL_OFFSET + 3 + p.y * EMBANK_SLOPE);
+      if (d < best) best = d;
+    }
+    return best;
   }
 
   /* זווית הפנייה בין i לבין i+ahead — מדד לחדות העיקול */
@@ -66,70 +88,98 @@ export class Track {
     return Math.abs(a);
   }
 
+  /* מטריצה שמניחה משטח שטוח על הכביש: X לרוחב, Y קדימה לאורך השיפוע, Z למעלה */
+  surfaceMatrix(i, lateral, lift) {
+    const p = this.points[i], l = this.lefts[i], t = this.tangents[i];
+    const right = new THREE.Vector3(-l.x, 0, -l.z);
+    const fwd = new THREE.Vector3(t.x, this.slopes[i], t.z).normalize();
+    const up = new THREE.Vector3().crossVectors(right, fwd);
+    const m = new THREE.Matrix4().makeBasis(right, fwd, up);
+    m.setPosition(p.x + l.x * lateral, p.y + lift, p.z + l.z * lateral);
+    return m;
+  }
+
   build(scene) {
     scene.add(this.group);
     this.buildGround();
     this.buildRoad();
     this.buildWalls();
+    this.buildEmbankments();
+    this.buildPads();
     this.buildStartLine();
-    this.buildScenery();
+    buildScenery(this);
+  }
+
+  dispose(scene) {
+    scene.remove(this.group);
+    this.group.traverse((o) => {
+      o.geometry?.dispose();
+      /* חומרים משותפים נשמרים במטמון של toon.js — משחררים רק טקסטורות שנוצרו כאן */
+      for (const m of [].concat(o.material || [])) m.map?.dispose();
+    });
   }
 
   buildGround() {
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), toon(PALETTE.grass));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), toon(this.theme.ground));
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(160, -0.02, 60);
+    ground.position.set(160, -0.05, 40);
     ground.receiveShadow = true;
     this.group.add(ground);
   }
 
-  /* רצועה לאורך המסלול בין שני היסטים צדדיים. צבע לכל מקטע, כדי לקבל פסים חדים */
-  ribbon(fromOffset, toOffset, y, colorAt, step = 1) {
+  /* רצועה לאורך המסלול בין שני היסטים צדדיים, בגובה הכביש. צבע לכל מקטע, כדי לקבל פסים חדים */
+  ribbon(fromOffset, toOffset, lift, colorAt, { step = 1, from = 0, to = this.count, opacity = 1 } = {}) {
     const pos = [];
     const col = [];
     const c = new THREE.Color();
-    for (let i = 0; i < this.count; i += step) {
-      const j = this.wrap(i + step);
-      const a = this.points[i], b = this.points[j];
-      const la = this.lefts[i], lb = this.lefts[j];
-      const a1 = [a.x + la.x * fromOffset, y, a.z + la.z * fromOffset];
-      const a2 = [a.x + la.x * toOffset, y, a.z + la.z * toOffset];
-      const b1 = [b.x + lb.x * fromOffset, y, b.z + lb.z * fromOffset];
-      const b2 = [b.x + lb.x * toOffset, y, b.z + lb.z * toOffset];
+    for (let i = from; i < to; i += step) {
+      const ii = this.wrap(i), j = this.wrap(i + step);
+      const a = this.points[ii], b = this.points[j];
+      const la = this.lefts[ii], lb = this.lefts[j];
+      const a1 = [a.x + la.x * fromOffset, a.y + lift, a.z + la.z * fromOffset];
+      const a2 = [a.x + la.x * toOffset, a.y + lift, a.z + la.z * toOffset];
+      const b1 = [b.x + lb.x * fromOffset, b.y + lift, b.z + lb.z * fromOffset];
+      const b2 = [b.x + lb.x * toOffset, b.y + lift, b.z + lb.z * toOffset];
       pos.push(...a1, ...b1, ...a2, ...a2, ...b1, ...b2);
-      c.set(colorAt(i));
+      c.set(colorAt(ii));
       for (let v = 0; v < 6; v++) col.push(c.r, c.g, c.b);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+    const extra = { vertexColors: true, side: THREE.DoubleSide };
+    if (opacity < 1) Object.assign(extra, { transparent: true, opacity, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, toon(0xffffff, extra));
     mesh.receiveShadow = true;
     this.group.add(mesh);
     return mesh;
   }
 
   buildRoad() {
+    const th = this.theme;
     const stripe = (a, b) => (i) => (Math.floor(i / 6) % 2 ? a : b);
+    /* השוליים בין הכביש לקיר, בגובה הכביש */
+    this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.0, () => th.embank, { step: 2 });
     /* פס דיו סביב הכביש — אותו קו מתאר כמו בשאר העולם */
-    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.005, () => PALETTE.ink);
-    this.ribbon(-ROAD_HALF, ROAD_HALF, 0.02, () => PALETTE.road);
-    this.ribbon(ROAD_HALF - 0.05, ROAD_HALF + 1.4, 0.03, stripe(PALETTE.berry, PALETTE.surface));
-    this.ribbon(-ROAD_HALF - 1.4, -ROAD_HALF + 0.05, 0.03, stripe(PALETTE.berry, PALETTE.surface));
+    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.02, () => PALETTE.ink);
+    this.ribbon(-ROAD_HALF, ROAD_HALF, 0.04, () => PALETTE.road);
+    this.ribbon(ROAD_HALF - 0.05, ROAD_HALF + 1.4, 0.05, stripe(th.curbA, th.curbB));
+    this.ribbon(-ROAD_HALF - 1.4, -ROAD_HALF + 0.05, 0.05, stripe(th.curbA, th.curbB));
+
+    /* משטחי קרח: תכלת שקוף על הכביש */
+    for (const [a, b] of this.def.ice) {
+      this.ribbon(-ROAD_HALF, ROAD_HALF, 0.06, (i) => (Math.floor(i / 3) % 2 ? 0xbfe6ff : 0xe3f5ff),
+        { from: Math.floor(a * this.count), to: Math.floor(b * this.count), opacity: 0.85 });
+    }
+
     /* קו מרוסק באמצע */
     const dash = new THREE.PlaneGeometry(0.45, 3.2);
     const dashes = new THREE.InstancedMesh(dash, toon(PALETTE.surface), Math.ceil(this.count / 8));
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const e = new THREE.Euler();
     let n = 0;
     for (let i = 0; i < this.count; i += 8) {
-      const p = this.points[i];
-      e.set(-Math.PI / 2, 0, this.headings[i], "YXZ");
-      q.setFromEuler(e);
-      m.compose(new THREE.Vector3(p.x, 0.04, p.z), q, new THREE.Vector3(1, 1, 1));
-      dashes.setMatrixAt(n++, m);
+      if (this.isIce[i]) continue;
+      dashes.setMatrixAt(n++, this.surfaceMatrix(i, 0, 0.07));
     }
     dashes.count = n;
     dashes.receiveShadow = true;
@@ -137,7 +187,8 @@ export class Track {
   }
 
   buildWalls() {
-    /* קיר צמיג נמוך משני הצדדים: פסים כחולים ולבנים */
+    const th = this.theme;
+    /* קיר צמיג נמוך משני הצדדים, בפסים */
     for (const side of [1, -1]) {
       const pos = [];
       const col = [];
@@ -150,8 +201,8 @@ export class Track {
         const la = this.lefts[i], lb = this.lefts[j];
         const ax = a.x + la.x * WALL_OFFSET * side, az = a.z + la.z * WALL_OFFSET * side;
         const bx = b.x + lb.x * WALL_OFFSET * side, bz = b.z + lb.z * WALL_OFFSET * side;
-        pos.push(ax, 0, az, bx, 0, bz, ax, h, az, ax, h, az, bx, 0, bz, bx, h, bz);
-        c.set(Math.floor(i / 6) % 2 ? PALETTE.sky : PALETTE.surface);
+        pos.push(ax, a.y, az, bx, b.y, bz, ax, a.y + h, az, ax, a.y + h, az, bx, b.y, bz, bx, b.y + h, bz);
+        c.set(Math.floor(i / 6) % 2 ? th.wallA : th.wallB);
         for (let v = 0; v < 6; v++) col.push(c.r, c.g, c.b);
       }
       const geo = new THREE.BufferGeometry();
@@ -163,16 +214,121 @@ export class Track {
       this.group.add(wall);
       /* קו דיו עבה על ראש הקיר */
       const top = [];
-      for (let i = 0; i <= this.count; i += step) {
-        const k = this.wrap(i);
-        const p = this.points[k], l = this.lefts[k];
-        top.push(new THREE.Vector3(p.x + l.x * WALL_OFFSET * side, h, p.z + l.z * WALL_OFFSET * side));
+      for (let i = 0; i < this.count; i += step) {
+        const p = this.points[i], l = this.lefts[i];
+        top.push(new THREE.Vector3(p.x + l.x * WALL_OFFSET * side, p.y + h, p.z + l.z * WALL_OFFSET * side));
       }
       const tube = new THREE.Mesh(
         new THREE.TubeGeometry(new THREE.CatmullRomCurve3(top, true), this.count / step, 0.12, 4, true),
         new THREE.MeshBasicMaterial({ color: PALETTE.ink })
       );
       this.group.add(tube);
+    }
+  }
+
+  /* מתחת לכביש מוגבה: סוללת עפר משופעת, ובקטעי הגשר — דופן ועמודים */
+  buildEmbankments() {
+    const th = this.theme;
+    const pos = [];
+    const deck = [];
+    const step = 2;
+    for (let i = 0; i < this.count; i += step) {
+      const j = this.wrap(i + step);
+      const a = this.points[i], b = this.points[j];
+      if (a.y < 0.05 && b.y < 0.05) continue;
+      const bridge = this.isBridge[i] || this.isBridge[j];
+      for (const side of [1, -1]) {
+        const la = this.lefts[i], lb = this.lefts[j];
+        const ta = WALL_OFFSET * side, tb = WALL_OFFSET * side;
+        const top1 = [a.x + la.x * ta, a.y, a.z + la.z * ta];
+        const top2 = [b.x + lb.x * tb, b.y, b.z + lb.z * tb];
+        if (bridge) {
+          /* דופן הגשר: 1.4 יחידות עובי */
+          const d1 = [top1[0], a.y - 1.4, top1[2]], d2 = [top2[0], b.y - 1.4, top2[2]];
+          deck.push(...top1, ...top2, ...d1, ...d1, ...top2, ...d2);
+        } else {
+          const oa = (WALL_OFFSET + a.y * EMBANK_SLOPE) * side, ob = (WALL_OFFSET + b.y * EMBANK_SLOPE) * side;
+          const bot1 = [a.x + la.x * oa, 0, a.z + la.z * oa];
+          const bot2 = [b.x + lb.x * ob, 0, b.z + lb.z * ob];
+          pos.push(...top1, ...top2, ...bot1, ...bot1, ...top2, ...bot2);
+        }
+      }
+      if (bridge) {
+        /* תחתית הגשר */
+        const la = this.lefts[i], lb = this.lefts[j];
+        const w = WALL_OFFSET;
+        const q = (p, l, s) => [p.x + l.x * w * s, p.y - 1.4, p.z + l.z * w * s];
+        deck.push(...q(a, la, 1), ...q(b, lb, 1), ...q(a, la, -1), ...q(a, la, -1), ...q(b, lb, 1), ...q(b, lb, -1));
+      }
+    }
+    for (const [arr, color] of [[pos, th.embank], [deck, 0xc9ced8]]) {
+      if (!arr.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, toon(color, { side: THREE.DoubleSide }));
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      this.group.add(mesh);
+    }
+
+    /* עמודים מתחת לגשר — רק במקומות שלא חוסמים את הכביש שעובר מתחת */
+    const pillarGeo = new THREE.BoxGeometry(1.6, 1, 1.6);
+    for (let i = 0; i < this.count; i += 14) {
+      if (!this.isBridge[i]) continue;
+      for (const side of [1, -1]) {
+        const p = this.points[i], l = this.lefts[i];
+        const x = p.x + l.x * (WALL_OFFSET - 1.5) * side, z = p.z + l.z * (WALL_OFFSET - 1.5) * side;
+        if (this.blocksLowerRoad(x, z, i)) continue;
+        const h = p.y - 1.4;
+        const pillar = outlined(pillarGeo, 0xc9ced8, 0.08);
+        pillar.scale.y = h;
+        pillar.position.set(x, h / 2, z);
+        this.group.add(pillar);
+      }
+    }
+  }
+
+  /* האם נקודה נמצאת בתוך הפרוזדור של קטע מסלול אחר (רחוק באינדקס) */
+  blocksLowerRoad(x, z, near) {
+    for (let k = 0; k < this.count; k += 2) {
+      const gap = Math.min(Math.abs(k - near), this.count - Math.abs(k - near));
+      if (gap < 60) continue;
+      const p = this.points[k];
+      if (Math.hypot(p.x - x, p.z - z) < WALL_OFFSET + 3) return true;
+    }
+    return false;
+  }
+
+  /* משטחי האצה: חצים זהובים על הכביש */
+  buildPads() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#f5c542";
+    ctx.fillRect(0, 0, 64, 96);
+    ctx.strokeStyle = "#1a1f2e";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 58, 90);
+    ctx.lineWidth = 9;
+    ctx.lineJoin = "miter";
+    for (const y of [22, 50, 78]) {
+      ctx.beginPath();
+      ctx.moveTo(12, y + 10);
+      ctx.lineTo(32, y - 10);
+      ctx.lineTo(52, y + 10);
+      ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+    const geo = new THREE.PlaneGeometry(4, 6);
+    for (const pad of this.boosts) {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(this.surfaceMatrix(pad.index, pad.lateral, 0.09));
+      this.group.add(mesh);
     }
   }
 
@@ -191,8 +347,8 @@ export class Track {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.magFilter = THREE.NearestFilter;
     const line = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, 1.8), new THREE.MeshBasicMaterial({ map: tex }));
-    line.rotation.set(-Math.PI / 2, this.headings[0], 0, "YXZ");
-    line.position.set(this.points[0].x, 0.05, this.points[0].z);
+    line.matrixAutoUpdate = false;
+    line.matrix.copy(this.surfaceMatrix(0, 0, 0.08));
     this.group.add(line);
 
     /* קשת קו הסיום */
@@ -217,71 +373,15 @@ export class Track {
     b.fillText("🏁 קו סיום 🏁", 256, 52);
     const bannerTex = new THREE.CanvasTexture(bannerCanvas);
     bannerTex.colorSpace = THREE.SRGBColorSpace;
-    const bannerMats = [toon(PALETTE.gold), toon(PALETTE.gold), toon(PALETTE.gold), toon(PALETTE.gold),
-      new THREE.MeshBasicMaterial({ map: bannerTex }), new THREE.MeshBasicMaterial({ map: bannerTex })];
+    const face = new THREE.MeshBasicMaterial({ map: bannerTex });
+    const gold = toon(PALETTE.gold);
     const banner = outlined(new THREE.BoxGeometry((ROAD_HALF + 2.6) * 2, 2.2, 0.6), PALETTE.gold);
-    banner.material = bannerMats;
+    banner.material = [gold, gold, gold, gold, face, face];
     banner.position.y = 8;
     arch.add(banner);
     arch.position.copy(this.points[0]);
     arch.rotation.y = this.headings[0];
     this.group.add(arch);
     this.arch = arch;
-  }
-
-  buildScenery() {
-    /* עצים ואבנים בפיזור קבוע (זרע קבוע = אותו נוף בכל טעינה) */
-    let seed = 7;
-    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.45, 2.4, 6);
-    const crownGeo = new THREE.ConeGeometry(2.2, 4.6, 7);
-    const roundGeo = new THREE.IcosahedronGeometry(2.1, 0);
-    const rockGeo = new THREE.DodecahedronGeometry(1.2, 0);
-    const crowns = [PALETTE.brand, PALETTE.grassDark, 0x2f9a6e];
-    let placed = 0;
-    for (let tries = 0; tries < 2400 && placed < 170; tries++) {
-      const x = -120 + rand() * 560;
-      const z = -180 + rand() * 470;
-      const d = this.distanceToCenter(x, z);
-      if (d < WALL_OFFSET + 4 || d > 95) continue;
-      const tree = new THREE.Group();
-      const kind = rand();
-      if (kind < 0.12) {
-        const rock = outlined(rockGeo, 0xc9ced8, 0.08);
-        rock.position.y = 0.7;
-        rock.rotation.set(rand(), rand(), rand());
-        tree.add(rock);
-      } else {
-        const trunk = outlined(trunkGeo, 0x8a5a3b, 0.08);
-        trunk.position.y = 1.2;
-        tree.add(trunk);
-        const crown = outlined(kind < 0.55 ? crownGeo : roundGeo, crowns[Math.floor(rand() * crowns.length)], 0.1);
-        crown.position.y = kind < 0.55 ? 4.4 : 4;
-        tree.add(crown);
-      }
-      const s = 0.8 + rand() * 0.7;
-      tree.scale.setScalar(s);
-      tree.position.set(x, 0, z);
-      this.group.add(tree);
-      placed++;
-    }
-
-    /* יציע צופים צבעוני ליד קו הסיום */
-    const p0 = this.points[0], l0 = this.lefts[0];
-    const stand = new THREE.Group();
-    const colors = [PALETTE.berry, PALETTE.gold, PALETTE.sky, PALETTE.purple, PALETTE.brand];
-    for (let row = 0; row < 4; row++) {
-      const step = outlined(new THREE.BoxGeometry(3, 1.2, 40), PALETTE.surface, 0.08);
-      step.position.set(row * 3, 0.6 + row * 1.2, 0);
-      stand.add(step);
-      for (let k = 0; k < 12; k++) {
-        const fan = outlined(new THREE.SphereGeometry(0.55, 8, 6), colors[(row * 3 + k) % colors.length], 0.08);
-        fan.position.set(row * 3, 1.8 + row * 1.2, -16.5 + k * 3);
-        stand.add(fan);
-      }
-    }
-    stand.position.set(p0.x - l0.x * (WALL_OFFSET + 3), 0, p0.z - l0.z * (WALL_OFFSET + 3));
-    stand.rotation.y = this.headings[0] + Math.PI;
-    this.group.add(stand);
   }
 }

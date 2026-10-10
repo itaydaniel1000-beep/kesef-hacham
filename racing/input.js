@@ -2,15 +2,17 @@
 
 const KEYS = {
   ArrowUp: "gas", KeyW: "gas",
-  ArrowDown: "brake", KeyS: "brake", Space: "brake",
+  ArrowDown: "brake", KeyS: "brake",
   ArrowLeft: "left", KeyA: "left",
-  ArrowRight: "right", KeyD: "right"
+  ArrowRight: "right", KeyD: "right",
+  Space: "drift",
+  ShiftLeft: "nitro", ShiftRight: "nitro", KeyN: "nitro"
 };
 
 export class Input {
   constructor() {
-    this.keys = { gas: false, brake: false, left: false, right: false };
-    this.touch = { gas: false, brake: false, left: false, right: false };
+    this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
+    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
 
     addEventListener("keydown", (e) => {
       const k = KEYS[e.code];
@@ -56,7 +58,9 @@ export class Input {
     return {
       gas: k.gas || t.gas ? 1 : 0,
       brake: k.brake || t.brake ? 1 : 0,
-      steer: (left ? 1 : 0) - (right ? 1 : 0)
+      steer: (left ? 1 : 0) - (right ? 1 : 0),
+      drift: k.drift || t.drift ? 1 : 0,
+      nitro: k.nitro || t.nitro ? 1 : 0
     };
   }
 }

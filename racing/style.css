@@ -227,9 +227,14 @@ kbd {
 .chip-place { background: var(--gold); }
 .chip-place small { color: var(--ink); }
 
+.hud-buttons {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 8px;
+}
+
 .chip-button {
   pointer-events: auto;
-  margin-inline-start: auto;
   min-width: 0;
   justify-content: center;
   font-size: 1.3rem;
@@ -248,11 +253,18 @@ kbd {
   box-shadow: 3px 3px 0 var(--ink);
 }
 
-.speedo {
+.dash {
   position: absolute;
   bottom: max(16px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.speedo {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -311,7 +323,8 @@ kbd {
   direction: ltr; /* ההגה תמיד משמאל והדוושות מימין, כמו ברוב משחקי הנייד */
 }
 
-.touch-group { display: flex; gap: 12px; }
+.touch-group { display: flex; gap: 12px; align-items: flex-end; }
+.touch-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
 .touch-btn {
   width: 76px;
@@ -330,12 +343,222 @@ kbd {
 .touch-btn.active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
 .touch-gas { background: var(--brand); color: #fff; width: 88px; height: 88px; font-size: 1.3rem; }
 .touch-brake { background: var(--berry); color: #fff; font-size: 1.1rem; }
+.touch-nitro { background: var(--gold); width: 64px; height: 64px; font-size: 0.95rem; }
+.touch-nitro.ready { animation: glow 0.9s ease-in-out infinite alternate; }
+@keyframes glow { to { box-shadow: 4px 4px 0 var(--ink), 0 0 0 6px rgba(245, 197, 66, .55); } }
 
 /* כשיש כפתורי מגע, מד המהירות עולה מעליהם */
-body.touch .speedo { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 100px); }
+body.touch .dash { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 150px); }
 
 @media (max-width: 420px) {
   .chip { min-width: 62px; padding: 3px 8px 5px; }
   .chip strong { font-size: 1.1rem; }
   #minimap { width: 96px; height: 96px; }
+}
+
+/* ---------- מוסך ---------- */
+
+.card-wide { width: min(760px, 100%); text-align: right; }
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.title-row .badge { margin: 0; flex: none; }
+.title-row .lead { margin: 0; }
+
+h2 {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin: 14px 0 8px;
+}
+
+.picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.pick {
+  font-family: var(--f-body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+
+.pick:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--ink); }
+.pick.selected { background: var(--gold); transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+
+.pick canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.pick strong { display: block; font-family: var(--f-display); font-weight: 800; font-size: 1.05rem; }
+.pick small { display: block; color: var(--ink-soft); font-weight: 600; line-height: 1.25; }
+.pick.selected small { color: var(--ink); }
+
+.stats { display: grid; gap: 3px; margin-top: 6px; text-align: right; }
+.stat { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 700; }
+.stat span:first-child { width: 48px; }
+.stat-bar { flex: 1; display: flex; gap: 3px; }
+.stat-bar i { flex: 1; height: 8px; border: 2px solid var(--ink); border-radius: 3px; background: var(--surface); }
+.stat-bar i.on { background: var(--brand); }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.swatch-btn {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 2px 2px 0 var(--ink);
+  cursor: pointer;
+}
+
+.swatch-btn.selected { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+.segmented {
+  display: flex;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 3px 3px 0 var(--ink);
+  width: fit-content;
+}
+
+.segmented button {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: .95rem;
+  padding: 8px 16px;
+  border: none;
+  border-inline-start: 3px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.segmented button:first-child { border-inline-start: none; }
+.segmented button.selected { background: var(--ink); color: #fff; }
+
+details.howto {
+  display: block;
+  margin: 16px 0 18px;
+  padding: 8px 14px;
+}
+
+details.howto summary { cursor: pointer; font-family: var(--f-display); font-weight: 800; }
+details.howto ul { margin: 8px 0 2px; padding: 0; list-style: none; display: grid; gap: 6px; }
+
+.card-wide .primary-button { display: block; margin: 0 auto; }
+
+.button-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+.secondary-button {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 12px 28px;
+  cursor: pointer;
+}
+
+.secondary-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+
+/* ---------- ניטרו והודעות ---------- */
+
+.nitro {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.nitro-label { font-family: var(--f-display); font-weight: 800; font-size: .85rem; }
+
+.nitro-bar {
+  width: 120px;
+  height: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#nitroFill {
+  height: 100%;
+  width: 30%;
+  background: var(--gold);
+  border-inline-end: 2px solid var(--ink);
+}
+
+.nitro.ready #nitroFill { background: var(--berry); }
+
+.toast {
+  position: absolute;
+  top: 26%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-display);
+  font-weight: 900;
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  padding: 4px 22px;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  opacity: 0;
+  transition: opacity .2s ease;
+  white-space: nowrap;
+}
+
+.toast.show { opacity: 1; }
+
+/* קווי מהירות בניטרו: קרניים מהמרכז, שקופות באמצע */
+#speedlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  background: repeating-conic-gradient(from 0deg at 50% 45%, rgba(255, 255, 255, .55) 0deg 1.2deg, transparent 1.2deg 9deg);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 75%);
+  mask-image: radial-gradient(ellipse at 50% 45%, transparent 38%, #000 75%);
+  transition: opacity .25s ease;
+}
+
+@media (max-width: 560px) {
+  .picker { gap: 6px; }
+  .pick { padding: 6px; }
+  .pick small { font-size: .72rem; }
+  .split { grid-template-columns: 1fr; gap: 0; }
+  .stat span:first-child { width: 40px; }
+  .title-row .badge { width: 52px; height: 52px; font-size: 1.6rem; }
+  .card-wide { padding: 18px 14px; }
+  .nitro-bar { width: 90px; }
 }

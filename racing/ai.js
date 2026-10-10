@@ -81,6 +81,14 @@ export class Driver {
     this.reverse = 0;
   }
 
+  /* מתחילים כל מירוץ נקי — בלי רוורס, עקיפה או ניטרו שנשארו מהמירוץ הקודם */
+  reset() {
+    this.avoid = 0;
+    this.usingNitro = false;
+    this.stuck = 0;
+    this.reverse = 0;
+  }
+
   /* מחשבים מראש את קו המירוץ ותכנון המהירות (בזמן הספירה לאחור), כדי שלא תהיה קפיצה ב"צא!" */
   prepare(track) {
     speedPlan(track, this.car, this.skill);

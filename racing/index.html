@@ -24,6 +24,7 @@
       <div class="chip"><small>מסלול</small><strong id="hudLap">0%</strong></div>
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
       <div class="hud-buttons">
+        <button id="pauseButton" class="chip chip-button" aria-label="השהיה">⏸</button>
         <button id="musicButton" class="chip chip-button" aria-label="מוזיקה">🎵</button>
         <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
       </div>
@@ -96,6 +97,20 @@
       </details>
 
       <button id="startButton" class="primary-button">יוצאים למירוץ</button>
+    </div>
+  </div>
+
+  <!-- ===== השהיה ===== -->
+  <div id="pause" class="overlay hidden">
+    <div class="card">
+      <div class="badge">⏸</div>
+      <h1>השהיה</h1>
+      <p class="lead">המירוץ מחכה לך.<span class="key-hint"> <kbd>Esc</kbd> ממשיך.</span></p>
+      <div class="button-stack">
+        <button id="resumeButton" class="primary-button">המשך</button>
+        <button id="restartButton" class="secondary-button">התחלה מחדש</button>
+        <button id="quitButton" class="secondary-button">למוסך</button>
+      </div>
     </div>
   </div>
 

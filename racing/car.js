@@ -189,6 +189,8 @@ export class Car {
     const sp = Math.abs(this.speed);
     const wantsDrift = (drift || (this.brakeDrifts && brake && Math.abs(steer) > 0.3)) && sp > 16 && this.grounded;
     if (wantsDrift && !this.drifting && Math.abs(this.steer) > 0.25) this.drifting = true;
+    /* דריפט שהתחיל מהבלם (ולא ממקש הדריפט) ממשיך לבלום — אחרת אי אפשר להאט בפנייה */
+    const brakeDrift = this.drifting && !drift;
     if (this.drifting && (!wantsDrift || sp < 12)) this.drifting = false;
 
     /* ניטרו: מחזיקים את המקש כל עוד יש במד */
@@ -210,8 +212,8 @@ export class Car {
         const room = Math.max(0, 1 - this.speed / top);
         this.speed += this.accel * Math.max(gas, boosted ? 1 : 0) * (boosted ? 1.8 : 1) * (0.35 + 0.65 * room) * dt;
       }
-      if (brake > 0 && !this.drifting) {
-        if (this.speed > 0.5) this.speed -= 38 * brake * dt;
+      if (brake > 0 && (!this.drifting || brakeDrift)) {
+        if (this.speed > 0.5) this.speed -= 38 * brake * (this.drifting ? 0.6 : 1) * dt;
         else this.speed = Math.max(-12, this.speed - 12 * brake * dt);
       }
       if (!gas && !brake && !boosted) {

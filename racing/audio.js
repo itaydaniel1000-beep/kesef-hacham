@@ -84,6 +84,15 @@ export class GameAudio {
     }
   }
 
+  /* השהיה: עוצרים את כל הקול (מנוע, מוזיקה, אפקטים) בלי לאבד את המצב */
+  suspend() {
+    this.ctx?.suspend?.();
+  }
+
+  resume() {
+    this.ctx?.resume?.();
+  }
+
   setMuted(m) {
     this.muted = m;
     if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.05);

@@ -301,7 +301,8 @@ input.bindTouch($("touch"));
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
 
-let state = "menu"; // menu | countdown | race | finished
+let state = "menu"; // menu | countdown | race | finished | paused
+let pausedFrom = null; // לאיזה מצב חוזרים מהשהיה
 let race = null;
 let countdown = 0;
 let resultsShownAt = 0;
@@ -313,14 +314,19 @@ function show(id, on) {
 
 function startRace() {
   gridUp();
-  for (const d of [...drivers, autopilot, cooldownDriver]) d?.prepare(track);
+  for (const d of [...drivers, autopilot, cooldownDriver]) {
+    d?.reset();
+    d?.prepare(track);
+  }
   race = new Race(track, cars, player);
   state = "countdown";
   countdown = 3.999;
   resultsShownAt = 0;
   lastCount = "";
+  pausedFrom = null;
   show("menu", false);
   show("results", false);
+  show("pause", false);
   show("hud", true);
   show("touch", isTouch);
   show("countdown", true);
@@ -329,18 +335,70 @@ function startRace() {
 
 function toGarage() {
   state = "menu";
+  pausedFrom = null;
   gridUp();
+  audio.resume();
   show("results", false);
+  show("pause", false);
   show("hud", false);
   show("touch", false);
   show("menu", true);
 }
 
+/* השהיה: הפיזיקה והזמן עוצרים, הקול מושהה, והמקשים משתחררים */
+const RACING = ["countdown", "race", "finished"];
+function pause() {
+  if (!RACING.includes(state)) return;
+  if (state === "finished" && !resultsShownAt) return; // מסך התוצאות כבר פתוח
+  pausedFrom = state;
+  state = "paused";
+  input.release();
+  audio.suspend();
+  show("touch", false);
+  show("countdown", false);
+  show("pause", true);
+}
+
+function resume() {
+  if (state !== "paused") return;
+  state = pausedFrom;
+  pausedFrom = null;
+  audio.resume();
+  show("pause", false);
+  show("touch", isTouch && !player.finished);
+  if (state === "countdown") show("countdown", true);
+  last = performance.now(); // שלא תהיה קפיצה בזמן אחרי ההשהיה
+}
+
 $("startButton").addEventListener("click", startRace);
 $("againButton").addEventListener("click", startRace);
 $("garageButton").addEventListener("click", toGarage);
+$("pauseButton").addEventListener("click", pause);
+$("resumeButton").addEventListener("click", resume);
+$("restartButton").addEventListener("click", () => {
+  audio.resume();
+  startRace();
+});
+$("quitButton").addEventListener("click", toGarage);
 addEventListener("keydown", (e) => {
+  if (e.code === "Escape" || e.code === "KeyP") {
+    if (state === "paused") resume();
+    else pause();
+    return;
+  }
+  /* כשכפתור בפוקוס, Enter כבר לוחץ עליו — לא מתחילים מירוץ פעם שנייה */
+  if (e.target instanceof HTMLButtonElement) return;
   if (e.code === "Enter" && (state === "menu" || (state === "finished" && !resultsShownAt))) startRace();
+});
+
+/* כשעוברים ללשונית או אפליקציה אחרת: באמצע מירוץ — השהיה; בכל מקרה — שקט */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pause();
+    audio.suspend();
+  } else if (state !== "paused") {
+    audio.resume();
+  }
 });
 
 $("muteButton").textContent = settings.muted ? "🔇" : "🔊";
@@ -652,7 +710,9 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000) * TIME_SCALE;
   last = now;
 
-  if (state === "menu") {
+  if (state === "paused") {
+    /* בהשהיה רק מציירים את התמונה הקפואה */
+  } else if (state === "menu") {
     /* מוסך: המצלמה מסתובבת לאט סביב המכוניות בגריד */
     orbit += dt * 0.25;
     for (const car of cars) car.syncMesh(dt, track);
@@ -682,6 +742,7 @@ requestAnimationFrame(frame);
 /* חשיפה לבדיקות אוטומטיות */
 window.__race = {
   get state() { return state; },
+  get drivers() { return drivers; },
   get race() { return race; },
   get player() { return player; },
   get cars() { return cars; },

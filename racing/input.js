@@ -25,10 +25,13 @@ export class Input {
       if (k) this.keys[k] = false;
     });
     /* כשהחלון מאבד פוקוס, משחררים הכול — אחרת המכונית ממשיכה לנסוע לבד */
-    addEventListener("blur", () => {
-      for (const k in this.keys) this.keys[k] = false;
-      for (const k in this.touch) this.touch[k] = false;
-    });
+    addEventListener("blur", () => this.release());
+  }
+
+  /* משחררים את כל המקשים והכפתורים — בהשהיה, כדי שהמכונית לא תמשיך לנסוע כשחוזרים */
+  release() {
+    for (const k in this.keys) this.keys[k] = false;
+    for (const k in this.touch) this.touch[k] = false;
   }
 
   bindTouch(root) {

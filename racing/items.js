@@ -4,9 +4,11 @@ import * as THREE from "three";
 import { ROAD_HALF } from "./track.js";
 
 export const ITEMS = {
-  boost: { icon: "🚀", name: "בוסט" },
+  boost: { icon: "⚡", name: "בוסט" },
   mine: { icon: "💣", name: "מוקש" },
-  warp: { icon: "🌀", name: "שיגור" }
+  warp: { icon: "🌀", name: "שיגור" },
+  missile: { icon: "🚀", name: "טיל" },
+  lightning: { icon: "⛈️", name: "ברקים" }
 };
 
 const BOOST_TIME = 5;      // שניות של בוסט לכל שימוש
@@ -18,6 +20,10 @@ const BOX_HIT = 2.4, MINE_HIT = 1.9;
 const HISTORY_STEP = 0.1;
 const MINE_BEHIND = 4;     // כמה מטרים מאחורי המכונית המוקש נשאר
 const OWNER_CLEAR = 8;     // המוקש שלך נדרך רק אחרי שהתרחקת ממנו כך
+export const ROLL_TIME = 1.2; // גלגל המזל: כמה זמן מסתובבים האייקונים עד שהפריט נקבע
+const MISSILE_SPEED = 28;  // כמה מהר מהמכונית שירתה (מטר לשנייה)
+const MISSILE_LIFE = 9;
+const STUN = 1.5, SLOW = 1.5;
 
 /* טקסטורת "?" לקופסה */
 function boxTexture() {
@@ -47,6 +53,10 @@ const boxGeo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
 const mineGeo = new THREE.SphereGeometry(0.55, 16, 12);
 const lightGeo = new THREE.SphereGeometry(0.16, 8, 6);
 let boxMat = null;
+const missileGeo = new THREE.ConeGeometry(0.28, 1.4, 12).rotateX(Math.PI / 2);
+const missileMat = new THREE.MeshStandardMaterial({ color: 0xd8dde3, metalness: 0.7, roughness: 0.3, emissive: 0x331100 });
+const flameGeo = new THREE.SphereGeometry(0.3, 8, 6);
+const flameMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
 const mineMat = new THREE.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.4, metalness: 0.7 });
 
 export class ItemSystem {
@@ -63,6 +73,7 @@ export class ItemSystem {
     this.fx = () => {}; // main.js מחבר לכאן קול וחלקיקים
     this.net = null;    // מולטיפלייר: main.js מחבר לכאן שליחת אירועים (קופסה, מוקש, פגיעה)
     this.mineCounter = 0;
+    this.missiles = [];
 
     /* שורות של שלוש קופסאות לרוחב הכביש, מפוזרות לאורך המסלול (לא על הזינוק, לא על משטחי האצה או קרח) */
     const rows = 8;
@@ -92,6 +103,8 @@ export class ItemSystem {
     }
     for (const m of this.mines) this.group.remove(m.mesh);
     this.mines = [];
+    for (const m of this.missiles) this.group.remove(m.mesh);
+    this.missiles = [];
     for (const car of cars) {
       car.item = null;
       car.itemCharges = 0;
@@ -103,6 +116,7 @@ export class ItemSystem {
 
   update(dt, cars, racing) {
     this.time += dt;
+    this.cars = cars;
     /* הקופסאות מסתובבות ומרחפות */
     for (const b of this.boxes) {
       if (b.respawn > 0) {
@@ -119,7 +133,9 @@ export class ItemSystem {
     }
     if (!racing) return;
 
+    this.updateMissiles(dt, cars);
     for (const car of cars) {
+      if (car.itemRoll > 0) car.itemRoll = Math.max(0, car.itemRoll - dt);
       if (car.remote) continue; // מכוניות של שחקנים אחרים: האיסוף והפגיעות נבדקים אצלם
       this.record(car, dt);
       if (car.item) car.itemAge += dt;
@@ -136,6 +152,7 @@ export class ItemSystem {
           car.item = kinds[Math.floor(Math.random() * kinds.length)];
           car.itemCharges = car.item === "boost" ? BOOST_CHARGES : 1;
           car.itemAge = 0;
+          car.itemRoll = ROLL_TIME; // גלגל המזל מסתובב — אי אפשר להשתמש עד שהוא נעצר
           this.fx("pickup", car);
         } else {
           this.fx("pickup-none", car);
@@ -217,9 +234,83 @@ export class ItemSystem {
     this.mines = this.mines.filter((mm) => mm !== m);
   }
 
+  /* המכונית הקרובה ביותר שלפניך (לפי המרחק לאורך המסלול) */
+  targetAhead(car, cars) {
+    let best = null, gap = Infinity;
+    for (const o of cars) {
+      if (o === car || o.finished) continue;
+      const d = o.distance - car.distance;
+      if (d > 0 && d < gap) {
+        gap = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  addMissile(id, owner, target, dist, lateral, speed) {
+    const mesh = new THREE.Mesh(missileGeo, missileMat);
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.z = -0.85;
+    mesh.add(flame);
+    mesh.castShadow = true;
+    this.group.add(mesh);
+    const m = { id, owner, target, dist, lateral, speed, life: MISSILE_LIFE, mesh, hit: false };
+    this.missiles.push(m);
+    this.placeMissile(m);
+    return m;
+  }
+
+  placeMissile(m) {
+    const t = this.track;
+    const i = t.wrap(Math.floor(m.dist));
+    const p = t.points[i], l = t.lefts[i];
+    m.mesh.position.set(p.x + l.x * m.lateral, p.y + 0.9, p.z + l.z * m.lateral);
+    m.mesh.rotation.y = t.headings[i];
+  }
+
+  /* הטיל טס לאורך המסלול ומתקרב לצד של המטרה; הפגיעה נבדקת אצל מי שנוהג במטרה */
+  updateMissiles(dt, cars) {
+    for (const m of this.missiles) {
+      m.life -= dt;
+      m.dist += (m.speed * dt) / this.track.spacing;
+      if (m.target) m.lateral += (m.target.lateral - m.lateral) * Math.min(1, dt * 4);
+      this.placeMissile(m);
+      if (m.target && !m.target.remote && !m.target.finished && m.dist >= m.target.distance - 0.5 && Math.abs(m.lateral - m.target.lateral) < 3) {
+        m.hit = true;
+        this.hitMissile(m.target, m.mesh.position);
+        this.net?.missileHit(m.id);
+      }
+      if (m.life <= 0) m.hit = true;
+    }
+    for (const m of this.missiles) if (m.hit) this.group.remove(m.mesh);
+    this.missiles = this.missiles.filter((m) => !m.hit);
+  }
+
+  hitMissile(car, pos) {
+    car.stun = STUN;
+    car.speed *= 0.3;
+    car.drifting = false;
+    this.fx("boom", car, pos.clone());
+  }
+
+  removeMissile(id) {
+    const m = this.missiles.find((mm) => mm.id === id);
+    if (m) m.hit = true;
+  }
+
+  /* ברקים: כל מי שלפניך (אצלי — רק המכוניות שאני מריץ) מאט לחצי */
+  strike(owner, ownerDistance = owner?.distance ?? 0) {
+    for (const o of this.cars || []) {
+      if (o === owner || o.remote || o.finished || o.distance <= ownerDistance) continue;
+      o.slow = SLOW;
+      this.fx("zapped", o);
+    }
+  }
+
   /* הפעלת הפריט (מקש ק) */
   use(car) {
-    if (!car.item || car.finished) return false;
+    if (!car.item || car.finished || car.itemRoll > 0) return false;
     const kind = car.item;
     if (kind === "boost") {
       car.padBoost = BOOST_TIME;
@@ -236,6 +327,17 @@ export class ItemSystem {
     } else if (kind === "warp") {
       this.warp(car);
       this.fx("warp", car);
+    } else if (kind === "missile") {
+      const target = this.targetAhead(car, this.cars || []);
+      const id = `${car.netId || "local"}-m${++this.mineCounter}`;
+      const speed = Math.max(car.speed, 20) + MISSILE_SPEED;
+      this.addMissile(id, car, target, car.distance + 3 / this.track.spacing, car.lateral, speed);
+      this.net?.missile(id, car.netId, target?.netId, car.distance + 3 / this.track.spacing, car.lateral, speed);
+      this.fx("missile", car);
+    } else if (kind === "lightning") {
+      this.strike(car);
+      this.net?.lightning(car.netId, car.distance);
+      this.fx("lightning", car);
     }
     car.itemCharges--;
     if (car.itemCharges <= 0) car.item = null;
@@ -267,7 +369,7 @@ export class ItemSystem {
 
   /* בוטים: מתי להפעיל */
   think(car, driver, cars) {
-    if (!car.item || car.finished || car.itemAge < 0.8) return;
+    if (!car.item || car.finished || car.itemAge < 0.8 || car.itemRoll > 0) return;
     if (car.item === "boost") {
       /* בוסט רק בישורת — בפנייה הוא היה זורק אותם לקיר */
       if (driver.onStraight && car.padBoost <= 0) this.use(car);
@@ -276,6 +378,11 @@ export class ItemSystem {
       if (behind || car.itemAge > 12) this.use(car);
     } else if (car.item === "warp") {
       if (car.itemAge > 1.5 && car.speed > 15) this.use(car);
+    } else if (car.item === "missile") {
+      const t = this.targetAhead(car, cars);
+      if ((t && (t.distance - car.distance) * this.track.spacing < 150) || car.itemAge > 8) this.use(car);
+    } else if (car.item === "lightning") {
+      if (cars.some((o) => o !== car && !o.finished && o.distance > car.distance) && car.itemAge > 1.2) this.use(car);
     }
   }
 }

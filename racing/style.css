@@ -822,3 +822,11 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 body.touch .touch-only-flex { display: flex; }
 .touch-look { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: 46px; height: 46px; font-size: 1.3rem; }
 .touch-look.active { transform: translateX(-50%) scale(.94); }
+
+/* הבזק של ברק */
+.flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; }
+.flash.on { animation: flash .6s ease-out; }
+@keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+/* גלגל המזל מסתובב */
+.item-slot.rolling { border-color: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, .25), 0 14px 40px rgba(0, 0, 0, .45); }
+.item-slot.rolling .item-icon { filter: blur(.4px); }

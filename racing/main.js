@@ -7,7 +7,7 @@ import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
-import { ItemSystem, ITEMS } from "./items.js";
+import { ItemSystem, ITEMS, ROLL_TIME } from "./items.js";
 import { Room } from "./net.js";
 import { Skids } from "./skids.js";
 import { Driver } from "./ai.js";
@@ -592,6 +592,24 @@ function hudSet(key, value, write) {
   write(value);
 }
 
+/* גלגל המזל: האייקונים מתחלפים — מהר בהתחלה ולאט לקראת הסוף — עם "טיק" בכל החלפה */
+const ROULETTE = Object.keys(ITEMS);
+const roulette = { spinning: false, next: 0, index: 0 };
+function spinRoulette() {
+  const elapsed = ROLL_TIME - player.itemRoll;
+  if (!roulette.spinning) {
+    roulette.spinning = true;
+    roulette.next = 0;
+  }
+  if (elapsed < roulette.next) return;
+  roulette.index = (roulette.index + 1) % ROULETTE.length;
+  hud.itemIcon.textContent = ITEMS[ROULETTE[roulette.index]].icon;
+  hud.itemCount.textContent = "";
+  audio.tick();
+  const p = elapsed / ROLL_TIME;
+  roulette.next = elapsed + 0.045 + 0.2 * p * p;
+}
+
 function updateHud() {
   hudSet("place", `${race.placeOf(player)}/${cars.length}`, (v) => (hud.place.textContent = v));
   hudSet("lap", `${Math.floor(race.progress(player) * 100)}%`, (v) => (hud.lap.textContent = v));
@@ -602,14 +620,19 @@ function updateHud() {
   hudSet("ready", ready, (v) => hud.nitro.classList.toggle("ready", v));
   hudSet("touchReady", ready && !player.nitroOn, (v) => hud.touchNitro.classList.toggle("ready", v));
   hudSet("lines", player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0, (v) => (hud.speedlines.style.opacity = v));
-  /* הפריט מוצג באמצע למעלה — רק כשיש לך אחד */
-  const item = player.item && !player.finished ? player.item + (player.item === "boost" ? player.itemCharges : "") : "";
+  /* הפריט מוצג באמצע למעלה — רק כשיש לך אחד. אחרי איסוף: גלגל מזל שמאט עד שהוא נעצר */
+  const rolling = player.item && player.itemRoll > 0;
+  const item = player.item && !player.finished ? player.item + (player.item === "boost" ? player.itemCharges : "") + (rolling ? "?" : "") : "";
   hudSet("item", item, () => {
     hud.itemSlot.classList.toggle("hidden", !item);
-    if (!item) return;
+    hud.itemSlot.classList.toggle("rolling", !!rolling);
+    if (!item || rolling) return;
+    if (roulette.spinning) audio.tick(true); // הגלגל נעצר
+    roulette.spinning = false;
     hud.itemIcon.textContent = ITEMS[player.item].icon;
     hud.itemCount.textContent = player.item === "boost" ? `×${player.itemCharges}` : "";
   });
+  if (rolling) spinRoulette();
   drawMinimap();
 }
 
@@ -710,6 +733,17 @@ function itemEffect(kind, car, pos) {
     audio.pad();
     shake = Math.max(shake, 0.25);
   } else if (kind === "mine" && mine) audio.thump(0.3);
+  else if (kind === "missile" && mine) audio.whoosh();
+  else if (kind === "lightning" && near) audio.thunder();
+  else if (kind === "zapped") {
+    if (near) for (let i = 0; i < 14; i++) particles.emit("spark", car.x, car.y + 2.5, car.z, 0xbfe6ff, { vy: -6, spread: 4 });
+    if (mine) {
+      flash();
+      audio.thunder();
+      vibrate([40, 30, 40]);
+      shake = Math.max(shake, 0.5);
+    }
+  }
   else if (kind === "warp") {
     if (mine) {
       audio.whoosh();
@@ -726,6 +760,14 @@ function itemEffect(kind, car, pos) {
       shake = Math.max(shake, 0.9);
     }
   }
+}
+
+/* הבזק לבן על המסך (ברק פגע בך) */
+function flash() {
+  const f = $("flash");
+  f.classList.remove("on");
+  void f.offsetWidth;
+  f.classList.add("on");
 }
 
 let effectTimer = 0;
@@ -1031,13 +1073,21 @@ function netSend(msg) {
 const itemNet = {
   box: (i) => netSend({ t: "box", i }),
   mine: (id, x, y, z, owner) => netSend({ t: "mine", id, x, y, z, owner }),
-  mineHit: (id) => netSend({ t: "mineHit", id })
+  mineHit: (id) => netSend({ t: "mineHit", id }),
+  missile: (id, owner, target, dist, lateral, speed) => netSend({ t: "missile", id, owner, target, dist, lateral, speed }),
+  missileHit: (id) => netSend({ t: "missileHit", id }),
+  lightning: (owner, dist) => netSend({ t: "lightning", owner, dist })
 };
+const ITEM_EVENTS = ["box", "mine", "mineHit", "missile", "missileHit", "lightning"];
+const carByNet = (id) => cars.find((c) => c.netId === id) || null;
 function applyItemEvent(msg) {
   if (!items) return;
   if (msg.t === "box") items.hideBox(msg.i);
   else if (msg.t === "mine") items.addMine(msg.x, msg.y, msg.z, cars.find((c) => c.netId === msg.owner) || null, msg.id);
   else if (msg.t === "mineHit") items.removeMine(msg.id);
+  else if (msg.t === "missile") items.addMissile(msg.id, carByNet(msg.owner), carByNet(msg.target), msg.dist, msg.lateral, msg.speed);
+  else if (msg.t === "missileHit") items.removeMissile(msg.id);
+  else if (msg.t === "lightning") items.strike(carByNet(msg.owner), msg.dist);
 }
 
 /* המכוניות לפי רשימת החדר: אני נוהג בשלי, המארח מריץ את הבוטים, וכל השאר מגיעים מהרשת */
@@ -1108,7 +1158,7 @@ function onNetMessage(msg, from) {
     } else if (msg.t === "state") {
       latestStates.set(from, msg.s);
       netCars.get(from)?.netApply(msg.s);
-    } else if (["box", "mine", "mineHit"].includes(msg.t)) {
+    } else if (ITEM_EVENTS.includes(msg.t)) {
       applyItemEvent(msg);
       room.broadcast(msg, from);
     }
@@ -1127,7 +1177,7 @@ function onNetMessage(msg, from) {
     startMultiplayer(msg);
   } else if (msg.t === "states") {
     for (const [id, st] of msg.list) if (id !== room.myId) netCars.get(id)?.netApply(st);
-  } else if (["box", "mine", "mineHit"].includes(msg.t)) {
+  } else if (ITEM_EVENTS.includes(msg.t)) {
     applyItemEvent(msg);
   } else if (msg.t === "toLobby") {
     backToRoom(false);

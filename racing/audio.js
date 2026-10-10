@@ -115,6 +115,13 @@ export class GameAudio {
     this.sfx.gain.setTargetAtTime(sfx, this.ctx.currentTime, 0.05);
   }
 
+  /* רעם: רעש נמוך ומתגלגל */
+  thunder() {
+    if (!this.ctx) return;
+    this.burst(1.4, { type: "lowpass", from: 900, to: 120, gain: 0.5 });
+    this.burst(0.15, { type: "bandpass", freq: 2400, gain: 0.12 });
+  }
+
   /* "טיק" של גלגל מזל — קצר וחד; גבוה יותר כשהגלגל נעצר */
   tick(last = false) {
     if (!this.ctx) return;

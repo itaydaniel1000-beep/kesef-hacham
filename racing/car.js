@@ -247,6 +247,9 @@ export class Car {
     this.historyTimer = 0;
     this.net = null;         // מולטיפלייר: המצב האחרון שהגיע מהרשת
     this.damage = 0;         // נזק ויזואלי בלבד, 0 עד 1 — מתאפס בכל מירוץ
+    this.stun = 0;           // שניות שנשארו מפגיעת טיל
+    this.slow = 0;           // שניות שנשארו מברק
+    this.itemRoll = 0;       // גלגל המזל של הקופסה עדיין מסתובב
   }
 
   buildMesh(s) {
@@ -469,7 +472,11 @@ export class Car {
     this.padBoost = Math.max(0, this.padBoost - dt);
     const boosted = this.nitroOn || this.padBoost > 0;
 
-    let top = this.maxSpeed * this.topScale * (offRoad ? 0.48 : 1) * (boosted ? 1.28 : 1) * (this.drafting ? 1.04 : 1);
+    /* טיל: כמעט עוצרים לשנייה וחצי. ברק: חצי מהירות לשנייה וחצי */
+    this.stun = Math.max(0, this.stun - dt);
+    this.slow = Math.max(0, this.slow - dt);
+    const hurt = this.stun > 0 ? 0.12 : this.slow > 0 ? 0.5 : 1;
+    let top = this.maxSpeed * this.topScale * hurt * (offRoad ? 0.48 : 1) * (boosted && hurt === 1 ? 1.28 : 1) * (this.drafting ? 1.04 : 1);
 
     if (this.grounded) {
       if (gas > 0 || boosted) {
@@ -490,7 +497,7 @@ export class Car {
       }
       /* עלייה מאטה, ירידה מאיצה */
       this.speed -= track.slopes[this.trackIndex] * 9 * dt;
-      if (this.speed > top) this.speed = Math.max(top, this.speed - (offRoad ? 45 : 20) * dt);
+      if (this.speed > top) this.speed = Math.max(top, this.speed - (offRoad || hurt < 1 ? 45 : 20) * dt);
       if (this.speed < -15) this.speed = -15; // גם ברוורס בירידה יש תקרה
     }
 

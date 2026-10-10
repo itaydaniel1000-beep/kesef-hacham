@@ -70,6 +70,7 @@ export class Car {
     this.groundHeight = undefined;
     this.airCooldown = 0;
     this.hitWall = false;
+    this.bumpCooldown = 0;   // כדי שחיכוך ארוך לא ינגן "בום" בכל פריים
     this.topScale = 1;       // עזרת השלמה לבוטים שמאחור (ai.js)
     this.input = { gas: 0, brake: 0, steer: 0, drift: 0, nitro: 0 };
     this.offRoad = false;
@@ -220,7 +221,9 @@ export class Car {
       }
       /* הבלם עובד גם בדריפט (ב-60%) — אחרת אי אפשר להאט באמצע פנייה */
       if (brake > 0) {
-        if (this.speed > 0.5) this.speed -= 38 * brake * (this.drifting ? 0.6 : 1) * dt;
+        /* בדריפט של מגע (בלם+היגוי) הבלם הוא גם כפתור הדריפט — בולמים רק קלות, אחרת הדריפט נעצר */
+        const driftBrake = this.drifting ? (this.brakeDrifts && !drift ? 0.3 : 0.6) : 1;
+        if (this.speed > 0.5) this.speed -= 38 * brake * driftBrake * dt;
         else this.speed = Math.min(this.speed, Math.max(-12, this.speed - 12 * brake * dt)); // בלי לקפוץ אם כבר מתגלגלים אחורה מהר
       }
       if (!gas && !brake && !boosted) {
@@ -259,6 +262,7 @@ export class Car {
     /* גובה: צמודים לכביש, אלא אם הכביש מתעקל למטה מהר יותר ממה שהכובד מושך — אז עפים */
     const ground = this.groundHeight;
     this.airCooldown = Math.max(0, (this.airCooldown || 0) - dt);
+    this.bumpCooldown = Math.max(0, this.bumpCooldown - dt);
     if (this.grounded) {
       const fling = this.speed * this.speed * track.vcurv[this.trackIndex];
       if (fling < -GRAVITY && this.speed > 20 && this.airCooldown <= 0) {
@@ -398,9 +402,10 @@ export function resolveCollisions(cars) {
         const avg = (a.speed + b.speed) / 2;
         a.speed = a.speed * 0.6 + avg * 0.4;
         b.speed = b.speed * 0.6 + avg * 0.4;
-        if (rel > 4) {
+        if (rel > 4 && a.bumpCooldown <= 0 && b.bumpCooldown <= 0) {
           a.events.push("bump");
           b.events.push("bump");
+          a.bumpCooldown = b.bumpCooldown = 0.3;
         }
       }
     }

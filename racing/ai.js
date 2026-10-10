@@ -142,6 +142,8 @@ export class Driver {
     } else {
       this.passing = null;
     }
+    /* אחרי הסיום מפנים את הקו המהיר — נוסעים בצד הכביש */
+    if (this.cruise) want = (this.lane >= 0 ? 1 : -1) * (ROAD_HALF - 2.4) - (line.off[ti] + this.lane);
     this.avoid += (want - this.avoid) * Math.min(1, 3 * dt);
 
     /* היגוי: רודפים אחרי נקודה על הקו, רחוקה יותר ככל שנוסעים מהר */

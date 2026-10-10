@@ -164,7 +164,7 @@ function buildCars() {
 function gridUp() {
   cars.forEach((car, i) => {
     const row = Math.floor(i / 3), col = (i % 3) - 1;
-    const back = Math.round(-(4 + row * 7.5 + (col === 0 ? 1.5 : 0)) / track.spacing);
+    const back = Math.round(-(4 + row * 7.5 + (col === 0 ? 1.5 : 0) + (car === player ? 3 : 0)) / track.spacing);
     car.placeAt(track, track.wrap(back), col * 4.6);
   });
   particles.clear();
@@ -325,6 +325,7 @@ function dropFocus() {
 
 function startRace() {
   dropFocus();
+  input.release();
   gridUp();
   for (const d of [...drivers, autopilot, cooldownDriver]) {
     d?.reset();
@@ -340,6 +341,7 @@ function startRace() {
   show("results", false);
   show("pause", false);
   show("hud", true);
+  show("pauseButton", true);
   show("touch", isTouch);
   show("countdown", true);
   audio.start();
@@ -389,7 +391,14 @@ function resume() {
   syncAudio();
   show("pause", false);
   show("touch", isTouch && !player.finished);
-  if (state === "countdown" || (state === "race" && countdown > 0.3)) show("countdown", true);
+  if (state === "countdown" || (state === "race" && countdown > 0.3)) {
+    /* מפעילים מחדש את האנימציה — אחרת המספר נשאר שקוף אחרי שהיא נגמרה */
+    const box = $("countdown");
+    box.classList.remove("pop");
+    void box.offsetWidth;
+    box.classList.add("pop");
+    show("countdown", true);
+  }
 }
 
 $("startButton").addEventListener("click", startRace);
@@ -479,7 +488,7 @@ function hudSet(key, value, write) {
 
 function updateHud() {
   hudSet("place", `${race.placeOf(player)}/${cars.length}`, (v) => (hud.place.textContent = v));
-  hudSet("lap", `${Math.round(race.progress(player) * 100)}%`, (v) => (hud.lap.textContent = v));
+  hudSet("lap", `${Math.floor(race.progress(player) * 100)}%`, (v) => (hud.lap.textContent = v));
   hudSet("time", formatTime(player.finished ? player.finishTime : race.time), (v) => (hud.time.textContent = v));
   hudSet("speed", Math.round(Math.abs(player.speed) * 4.2), (v) => (hud.speed.textContent = v));
   hudSet("nitro", Math.round(player.nitro * 100), (v) => (hud.nitroFill.style.width = `${v}%`));
@@ -491,6 +500,7 @@ function updateHud() {
 }
 
 function showResults() {
+  show("pauseButton", false); // אין מה להשהות במסך הסיום
   const place = race.placeOf(player);
   const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
   $("resultTitle").textContent = titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
@@ -725,7 +735,7 @@ function step(dt) {
     /* אחרי הסיום ממשיכים לגלגל לאט (cruise) — מכונית עומדת על הקו הייתה חוסמת את מי שמסיים אחריך */
     const driver = autopilot || cooldownDriver;
     player.brakeDrifts = false; // בלם+היגוי=דריפט רק כשאדם נוהג
-    driver.cruise = player.finished ? 15 : 0;
+    driver.cruise = player.finished ? 25 : 0;
     driver.update(dt, track, 1, cars);
   } else {
     player.brakeDrifts = isTouch; // בטלפון אין מקש דריפט — שם בלם+היגוי מחליק; במקלדת יש רווח
@@ -735,7 +745,7 @@ function step(dt) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
     const gap = (d.car.distance - player.distance) / track.count;
     const boost = player.finished ? 1 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
-    d.cruise = d.car.finished ? 15 : 0;
+    d.cruise = d.car.finished ? 25 : 0;
     d.update(dt, track, boost, cars);
   }
   for (const car of cars) car.update(dt, track, cars);

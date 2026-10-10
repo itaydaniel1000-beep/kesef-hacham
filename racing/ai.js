@@ -172,6 +172,7 @@ export class Driver {
     const straight = 160 / track.spacing;
     let minAhead = Infinity;
     for (let j = 0; j < straight; j += 8) minAhead = Math.min(minAhead, plan[track.wrap(i + j)]);
+    this.onStraight = minAhead >= car.maxSpeed * 0.97; // items.js: בוסט רק בישורת
     if (!this.usingNitro && car.nitro > 0.3 && minAhead >= car.maxSpeed * 0.97 && boost >= 0.98) this.usingNitro = true;
     if (this.usingNitro && (car.nitro < 0.03 || minAhead < car.maxSpeed * 0.9)) this.usingNitro = false;
     if (this.usingNitro || car.padBoost > 0) target = Math.max(target, Math.min(minAhead * 1.28, car.maxSpeed * 1.28));

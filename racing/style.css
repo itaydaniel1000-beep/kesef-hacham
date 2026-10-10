@@ -680,3 +680,8 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 .overlay { background: radial-gradient(ellipse at center, rgba(5, 7, 10, .35), rgba(5, 7, 10, .75)); }
 .pick canvas { background: #151a22; }
 .credits { margin: 12px 0 0; text-align: center; font-size: .72rem; color: var(--ink-soft); direction: rtl; }
+
+/* פריט מקופסת הפתעה */
+.chip-item strong { font-size: 1.3rem; min-width: 2.2em; text-align: center; }
+.chip-item.has { background: rgba(255, 196, 0, .25); border-color: rgba(255, 196, 0, .7); }
+.touch-item { width: 54px; height: 54px; font-size: .8rem; background: rgba(160, 80, 255, .8); }

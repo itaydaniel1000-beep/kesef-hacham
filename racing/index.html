@@ -23,6 +23,7 @@
       <div class="chip chip-place"><small>מקום</small><strong id="hudPlace">9/9</strong></div>
       <div class="chip"><small>מסלול</small><strong id="hudLap">0%</strong></div>
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
+      <div class="chip chip-item" id="hudItemChip"><small>פריט <span class="key-hint">(ק)</span></small><strong id="hudItem">—</strong></div>
       <div class="hud-buttons">
         <button id="pauseButton" class="chip chip-button" aria-label="השהיה">⏸</button>
         <button id="musicButton" class="chip chip-button" aria-label="מוזיקה">🎵</button>
@@ -48,6 +49,7 @@
     <div class="touch-group touch-pedals">
       <button class="touch-btn touch-brake" data-key="brake">בלם</button>
       <div class="touch-col">
+        <button class="touch-btn touch-item" data-key="item">פריט</button>
         <button class="touch-btn touch-nitro" data-key="nitro">טורבו</button>
         <button class="touch-btn touch-gas" data-key="gas">גז</button>
       </div>
@@ -92,6 +94,7 @@
           <li><kbd>רווח</kbd> דריפט — מחליקים בפנייה וממלאים ניטרו</li>
           <li><kbd>Shift</kbd> / <kbd>N</kbd> ניטרו · חצים זהובים על הכביש = דחיפה</li>
           <li>נסיעה צמוד מאחורי מכונית אחרת גם ממלאת ניטרו</li>
+          <li><kbd>ק</kbd> הפעלת פריט מקופסת הפתעה: 🚀 בוסט ×3 · 💣 מוקש מאחוריך (מי שעולה עליו חוזר 3 שניות) · 🌀 שיגור קדימה</li>
           <li class="touch-only">בטלפון: בלם + היגוי במהירות = דריפט</li>
         </ul>
       </details>

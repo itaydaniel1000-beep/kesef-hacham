@@ -236,6 +236,11 @@ export class Car {
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
     this.finished = false;
     this.finishTime = 0;
+    this.item = null;        // פריט מקופסת הפתעה (items.js)
+    this.itemCharges = 0;
+    this.itemAge = 0;
+    this.history = [];
+    this.historyTimer = 0;
   }
 
   buildMesh(s) {

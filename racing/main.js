@@ -7,6 +7,7 @@ import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
+import { ItemSystem, ITEMS } from "./items.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -139,6 +140,10 @@ audio.musicOn = settings.music;
 const trackData = new Map(TRACKS.map((def) => [def.id, new Track(def)]));
 let track = null;
 
+/* קופסאות הפתעה: מערכת אחת לכל מסלול */
+const itemSystems = new Map();
+let items = null;
+
 function useTrack(id) {
   const next = trackData.get(findTrack(id).id);
   if (next === track) return;
@@ -147,6 +152,12 @@ function useTrack(id) {
   track = next;
   if (track.built) scene.add(track.group);
   else track.build(scene);
+  if (!itemSystems.has(track)) {
+    const sys = new ItemSystem(track);
+    sys.fx = itemEffect;
+    itemSystems.set(track, sys);
+  }
+  items = itemSystems.get(track);
   const th = track.theme;
   const u = sky.material.uniforms;
   u.turbidity.value = th.turbidity;
@@ -378,6 +389,7 @@ function startRace() {
     d?.prepare(track);
   }
   race = new Race(track, cars, player);
+  items.reset(cars);
   state = "countdown";
   countdown = 3.999;
   resultsShownAt = 0;
@@ -525,6 +537,7 @@ const hud = {
   place: $("hudPlace"), lap: $("hudLap"), time: $("hudTime"), speed: $("hudSpeed"),
   nitroFill: $("nitroFill"), nitro: document.querySelector(".nitro"),
   touchNitro: document.querySelector(".touch-nitro"), speedlines: $("speedlines"),
+  item: $("hudItem"), itemChip: $("hudItemChip"),
   last: {}
 };
 function hudSet(key, value, write) {
@@ -543,6 +556,11 @@ function updateHud() {
   hudSet("ready", ready, (v) => hud.nitro.classList.toggle("ready", v));
   hudSet("touchReady", ready && !player.nitroOn, (v) => hud.touchNitro.classList.toggle("ready", v));
   hudSet("lines", player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0, (v) => (hud.speedlines.style.opacity = v));
+  const item = player.item ? ITEMS[player.item].icon + (player.item === "boost" ? `×${player.itemCharges}` : "") : "—";
+  hudSet("item", item, (v) => {
+    hud.item.textContent = v;
+    hud.itemChip.classList.toggle("has", v !== "—");
+  });
   drawMinimap();
 }
 
@@ -627,6 +645,34 @@ function rearOf(car, side) {
   const fx = Math.sin(car.heading), fz = Math.cos(car.heading);
   const lx = Math.cos(car.heading), lz = -Math.sin(car.heading);
   return [car.x - fx * 1.9 + lx * side, car.y + 0.3, car.z - fz * 1.9 + lz * side];
+}
+
+/* קול ואפקטים של הפריטים */
+function itemEffect(kind, car, pos) {
+  const mine = car === player;
+  const near = mine || Math.hypot(car.x - camera.position.x, car.z - camera.position.z) < 80;
+  if (kind === "pickup" && mine) audio.beep(true);
+  else if (kind === "pickup-none" && mine) audio.beep(false);
+  else if (kind === "boost" && mine) {
+    audio.pad();
+    shake = Math.max(shake, 0.25);
+  } else if (kind === "mine" && mine) audio.thump(0.3);
+  else if (kind === "warp") {
+    if (mine) {
+      audio.whoosh();
+      shake = Math.max(shake, 0.4);
+    }
+    if (near) for (let i = 0; i < 24; i++) particles.emit("spark", car.x, car.y + 1, car.z, 0x7ae0ff, { vy: 4, spread: 9 });
+  } else if (kind === "boom") {
+    if (near) {
+      for (let i = 0; i < 18; i++) particles.emit("spark", pos.x, pos.y + 0.5, pos.z, 0xffa040, { vy: 8, spread: 12 });
+      for (let i = 0; i < 12; i++) particles.emit("smoke", pos.x, pos.y + 0.5, pos.z, 0x55585e, { spread: 6 });
+    }
+    if (mine) {
+      audio.thump(1);
+      shake = Math.max(shake, 0.9);
+    }
+  }
 }
 
 let effectTimer = 0;
@@ -771,6 +817,8 @@ function step(dt) {
     updateCountdown();
     if (countdown <= 1) state = "race";
     for (const car of cars) car.syncMesh(dt, track);
+    items.update(dt, cars, false);
+    input.takeItem(); // לחיצה על ק לפני הזינוק לא נשמרת
     return;
   }
   if (state === "race") {
@@ -785,9 +833,11 @@ function step(dt) {
     player.brakeDrifts = false; // בלם+היגוי=דריפט רק כשאדם נוהג
     driver.cruise = player.finished ? 25 : 0;
     driver.update(dt, track, 1, cars);
+    if (autopilot) items.think(player, autopilot, cars);
   } else {
     player.brakeDrifts = isTouch; // בטלפון אין מקש דריפט — שם בלם+היגוי מחליק; במקלדת יש רווח
     Object.assign(player.input, input.read());
+    if (input.takeItem()) items.use(player);
   }
   for (const d of drivers) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
@@ -795,9 +845,11 @@ function step(dt) {
     const boost = player.finished ? 1 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
     d.cruise = d.car.finished ? 25 : 0;
     d.update(dt, track, boost, cars);
+    items.think(d.car, d, cars);
   }
   for (const car of cars) car.update(dt, track, cars);
   resolveCollisions(cars);
+  items.update(dt, cars, true);
   race.update(dt);
 
   if (player.finished && state === "race") {
@@ -873,6 +925,7 @@ window.__race = {
   get player() { return player; },
   get cars() { return cars; },
   get track() { return track; },
+  get items() { return items; },
   audio,
   renderer,
   scene,

@@ -12,10 +12,17 @@ const KEYS = {
 export class Input {
   constructor() {
     this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
-    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
+    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, item: false };
     this.capture = false; // main.js מדליק את זה בזמן מירוץ
 
+    this.itemPressed = false;
     addEventListener("keydown", (e) => {
+      /* ק (במקלדת עברית — אותו מקש פיזי כמו E): הפעלת הפריט, פעם אחת לכל לחיצה */
+      if (e.code === "KeyE") {
+        if (!e.repeat) this.itemPressed = true;
+        if (this.capture) e.preventDefault();
+        return;
+      }
       const k = KEYS[e.code];
       if (!k) return;
       this.keys[k] = true;
@@ -31,6 +38,7 @@ export class Input {
 
   /* משחררים את כל המקשים והכפתורים — בהשהיה, כדי שהמכונית לא תמשיך לנסוע כשחוזרים */
   release() {
+    this.itemPressed = false;
     for (const k in this.keys) this.keys[k] = false;
     for (const k in this.touch) this.touch[k] = false;
     for (const btn of this.buttons || []) btn.classList.remove("active");
@@ -42,6 +50,7 @@ export class Input {
       const key = btn.dataset.key;
       const on = (e) => {
         e.preventDefault();
+        if (key === "item") this.itemPressed = true;
         btn.setPointerCapture?.(e.pointerId);
         this.touch[key] = true;
         btn.classList.add("active");
@@ -56,6 +65,13 @@ export class Input {
       btn.addEventListener("lostpointercapture", off);
       btn.addEventListener("contextmenu", (e) => e.preventDefault());
     }
+  }
+
+  /* האם לחצו על ק מאז הפעם הקודמת */
+  takeItem() {
+    const pressed = this.itemPressed;
+    this.itemPressed = false;
+    return pressed;
   }
 
   read() {

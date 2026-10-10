@@ -33,10 +33,12 @@ export class Input {
   release() {
     for (const k in this.keys) this.keys[k] = false;
     for (const k in this.touch) this.touch[k] = false;
+    for (const btn of this.buttons || []) btn.classList.remove("active");
   }
 
   bindTouch(root) {
-    for (const btn of root.querySelectorAll("[data-key]")) {
+    this.buttons = [...root.querySelectorAll("[data-key]")];
+    for (const btn of this.buttons) {
       const key = btn.dataset.key;
       const on = (e) => {
         e.preventDefault();

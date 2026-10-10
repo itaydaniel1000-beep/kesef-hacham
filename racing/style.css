@@ -233,6 +233,8 @@ kbd {
   gap: 8px;
 }
 
+.chip-button.off { opacity: .45; }
+
 .chip-button {
   pointer-events: auto;
   min-width: 0;

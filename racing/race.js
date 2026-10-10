@@ -47,7 +47,7 @@ export class Race {
   projectedTime(car) {
     if (car.finished) return car.finishTime;
     const total = this.track.count * LAPS;
-    const done = Math.max(1, car.distance);
+    const done = Math.max(total * 0.05, car.distance); // מי שכמעט לא זז — בלי זמן הזוי
     return this.time * (total / done);
   }
 }

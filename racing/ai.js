@@ -99,7 +99,8 @@ export class Driver {
     /* חילוץ: אם נתקע בקיר — רוורס קצר עם הגה הפוך */
     if (this.reverse > 0) {
       this.reverse -= dt;
-      Object.assign(car.input, { gas: 0, brake: 1, nitro: 0, drift: 0, steer: car.lateral > 0 ? -1 : 1 });
+      Object.assign(car.input, { gas: 0, brake: 1, nitro: 0, drift: 0, steer: car.lateral > 0 ? 1 : -1 });
+      /* ברוורס ההגה הפוך: כדי שהאף יתרחק מקיר שמשמאל (lateral חיובי) מסובבים שמאלה */
       return;
     }
     this.stuck = v < 2 && car.input.gas ? this.stuck + dt : 0;
@@ -139,7 +140,9 @@ export class Driver {
 
     /* מהירות: לפי התכנון, קצת קדימה (המכונית צריכה זמן להאט) */
     const plannedAhead = plan[track.wrap(i + Math.round((v * 0.15) / track.spacing) + 2)];
-    let target = Math.min(plan[i], plannedAhead) * boost;
+    /* עזרת ההשלמה (boost מעל 1) פועלת רק בישורות — בפנייה התכנון כבר על גבול האחיזה */
+    const planned = Math.min(plan[i], plannedAhead);
+    let target = boost > 1 && planned < car.maxSpeed * 0.97 ? planned : planned * boost;
     if (this.avoid !== 0 && Math.abs(want) > 0) target *= 0.98; // באמצע עקיפה — בלי להתפרע
 
     /* ניטרו: רק כשלפנינו ישורת ארוכה שבה התכנון מרשה לנסוע מהר מהמהירות הנוכחית */

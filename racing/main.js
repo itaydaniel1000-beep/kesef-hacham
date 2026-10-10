@@ -50,7 +50,9 @@ try {
 } catch {
   /* אחסון חסום — מתחילים מברירת המחדל */
 }
-if (params.get("track")) settings.track = params.get("track");
+settings.track = findTrack(settings.track).id;
+/* ?track= בוחר מסלול לביקור הזה בלבד — לא נשמר כברירת מחדל */
+let currentTrackId = findTrack(params.get("track") || settings.track).id;
 if (!CAR_TYPES[settings.type]) settings.type = "grip";
 if (!LEVELS[settings.level]) settings.level = "normal";
 if (!COLORS.some((c) => c.color === settings.color)) settings.color = PALETTE.brand;
@@ -235,7 +237,7 @@ function buildGarage() {
     drawTrackPreview(c, trackData.get(def.id));
     btn.append(c, el("strong", null, `${def.emoji} ${def.name}`), el("small", null, def.blurb));
     btn.addEventListener("click", () => {
-      settings.track = def.id;
+      settings.track = currentTrackId = def.id;
       saveSettings();
       markSelected(tp, (b) => b.dataset.id === def.id);
       useTrack(def.id);
@@ -243,7 +245,7 @@ function buildGarage() {
     });
     tp.appendChild(btn);
   }
-  markSelected(tp, (b) => b.dataset.id === settings.track);
+  markSelected(tp, (b) => b.dataset.id === currentTrackId);
 
   const cp = $("carPicker");
   const labels = { speed: "מהירות", accel: "תאוצה", grip: "אחיזה" };
@@ -347,7 +349,7 @@ function toGarage() {
   pausedFrom = null;
   gridUp();
   syncAudio();
-  $("speedlines").style.opacity = 0;
+  hudSet("lines", 0, (v) => (hud.speedlines.style.opacity = v));
   show("results", false);
   show("pause", false);
   show("hud", false);
@@ -364,7 +366,7 @@ function pause() {
   state = "paused";
   input.release();
   syncAudio();
-  $("speedlines").style.opacity = 0;
+  hudSet("lines", 0, (v) => (hud.speedlines.style.opacity = v));
   show("touch", false);
   show("countdown", false);
   show("pause", true);
@@ -377,7 +379,7 @@ function resume() {
   syncAudio();
   show("pause", false);
   show("touch", isTouch && !player.finished);
-  if (state === "countdown") show("countdown", true);
+  if (state === "countdown" || (state === "race" && countdown > 0.3)) show("countdown", true);
 }
 
 $("startButton").addEventListener("click", startRace);
@@ -419,10 +421,9 @@ $("musicButton").classList.toggle("off", !settings.music);
 $("musicButton").addEventListener("click", () => {
   settings.music = !settings.music;
   audio.setMusic(settings.music);
-  $("musicButton").style.opacity = settings.music ? 1 : 0.45;
+  $("musicButton").classList.toggle("off", !settings.music);
   saveSettings();
 });
-$("musicButton").style.opacity = settings.music ? 1 : 0.45;
 
 
 let lastCount = "";
@@ -441,16 +442,29 @@ function updateCountdown() {
   }
 }
 
-function updateHud(dt) {
-  $("hudPlace").textContent = `${race.placeOf(player)}/${cars.length}`;
-  $("hudLap").textContent = `${Math.round(race.progress(player) * 100)}%`;
-  $("hudTime").textContent = formatTime(player.finished ? player.finishTime : race.time);
-  $("hudSpeed").textContent = Math.round(Math.abs(player.speed) * 4.2);
-  $("nitroFill").style.width = `${Math.round(player.nitro * 100)}%`;
+/* רכיבי הלוח נשלפים פעם אחת, וכותבים לדף רק כשהערך באמת השתנה */
+const hud = {
+  place: $("hudPlace"), lap: $("hudLap"), time: $("hudTime"), speed: $("hudSpeed"),
+  nitroFill: $("nitroFill"), nitro: document.querySelector(".nitro"),
+  touchNitro: document.querySelector(".touch-nitro"), speedlines: $("speedlines"),
+  last: {}
+};
+function hudSet(key, value, write) {
+  if (hud.last[key] === value) return;
+  hud.last[key] = value;
+  write(value);
+}
+
+function updateHud() {
+  hudSet("place", `${race.placeOf(player)}/${cars.length}`, (v) => (hud.place.textContent = v));
+  hudSet("lap", `${Math.round(race.progress(player) * 100)}%`, (v) => (hud.lap.textContent = v));
+  hudSet("time", formatTime(player.finished ? player.finishTime : race.time), (v) => (hud.time.textContent = v));
+  hudSet("speed", Math.round(Math.abs(player.speed) * 4.2), (v) => (hud.speed.textContent = v));
+  hudSet("nitro", Math.round(player.nitro * 100), (v) => (hud.nitroFill.style.width = `${v}%`));
   const ready = player.nitro > 0.15;
-  document.querySelector(".nitro").classList.toggle("ready", ready);
-  document.querySelector(".touch-nitro").classList.toggle("ready", ready && !player.nitroOn);
-  $("speedlines").style.opacity = player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0;
+  hudSet("ready", ready, (v) => hud.nitro.classList.toggle("ready", v));
+  hudSet("touchReady", ready && !player.nitroOn, (v) => hud.touchNitro.classList.toggle("ready", v));
+  hudSet("lines", player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0, (v) => (hud.speedlines.style.opacity = v));
   drawMinimap();
 }
 
@@ -604,6 +618,8 @@ function celebrate() {
 
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
+const wantPos = new THREE.Vector3();   // וקטורים לשימוש חוזר — בלי ליצור חדשים בכל פריים
+const wantLook = new THREE.Vector3();
 let camReady = false;
 
 function updateCamera(dt, target, orbit = 0) {
@@ -611,10 +627,8 @@ function updateCamera(dt, target, orbit = 0) {
   const dir = target.heading + orbit;
   const fx = Math.sin(dir), fz = Math.cos(dir);
   const back = orbit ? 14 : 9.5 + (target.nitroOn ? 1 : 0);
-  const wantPos = new THREE.Vector3(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
-  const wantLook = new THREE.Vector3(
-    target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6
-  );
+  wantPos.set(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
+  wantLook.set(target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6);
   if (!camReady || !orbit) {
     camPos.copy(wantPos);
     camLook.copy(wantLook);
@@ -737,7 +751,7 @@ function frame(now) {
     }
     effects(dt);
     updateCamera(dt, player);
-    updateHud(dt);
+    updateHud();
     audio.engine(player, true, dt);
   }
 
@@ -749,7 +763,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-useTrack(settings.track);
+useTrack(currentTrackId);
 buildCars();
 buildGarage();
 requestAnimationFrame(frame);

@@ -91,6 +91,7 @@ sun.shadow.bias = -0.0008;
 scene.add(sun, sun.target);
 
 const particles = new Particles(scene);
+const confetti = new Particles(scene, 100); // מאגר נפרד, כדי שעשן ולהבות לא ימחקו את קונפטי הניצחון
 const audio = new GameAudio();
 audio.muted = settings.muted;
 audio.musicOn = settings.music;
@@ -167,6 +168,7 @@ function gridUp() {
     car.placeAt(track, track.wrap(back), col * 4.6);
   });
   particles.clear();
+  confetti.clear();
 }
 
 /* ---------- מוסך ---------- */
@@ -603,6 +605,7 @@ function effects(dt) {
     }
   }
   particles.update(dt);
+  confetti.update(dt);
 }
 
 function celebrate() {
@@ -610,7 +613,7 @@ function celebrate() {
   const colors = [PALETTE.berry, PALETTE.gold, PALETTE.sky, PALETTE.purple, PALETTE.brand];
   for (let i = 0; i < 90; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.random() * 12;
-    particles.emit("confetti", player.x + Math.cos(a) * r, player.y + 9 + Math.random() * 6, player.z + Math.sin(a) * r,
+    confetti.emit("confetti", player.x + Math.cos(a) * r, player.y + 9 + Math.random() * 6, player.z + Math.sin(a) * r,
       colors[i % colors.length], { vy: -2, spread: 4 });
   }
 }
@@ -700,9 +703,11 @@ function step(dt) {
   if (player.finished || autopilot) {
     /* אחרי הסיום ממשיכים לגלגל לאט (cruise) — מכונית עומדת על הקו הייתה חוסמת את מי שמסיים אחריך */
     const driver = autopilot || cooldownDriver;
+    player.brakeDrifts = false; // בלם+היגוי=דריפט רק כשאדם נוהג
     driver.cruise = player.finished ? 15 : 0;
     driver.update(dt, track, 1, cars);
   } else {
+    player.brakeDrifts = true;
     Object.assign(player.input, input.read());
   }
   for (const d of drivers) {

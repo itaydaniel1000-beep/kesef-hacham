@@ -149,7 +149,9 @@ export class Driver {
     const alpha = angleDiff(Math.atan2(tx - car.x, tz - car.z), car.heading);
     const dist = Math.max(3, Math.hypot(tx - car.x, tz - car.z));
     /* העקמומיות שצריך כדי להגיע לנקודה, חלקי העקמומיות שהמכונית מסוגלת לה במהירות הזאת */
-    const need = (2 * Math.sin(alpha)) / dist;
+    let need = (2 * Math.sin(alpha)) / dist;
+    /* כשהמכונית מסתכלת אחורה, sin קטן מדי — מסובבים את ההגה עד הסוף כדי להסתובב */
+    if (Math.abs(alpha) > Math.PI / 2) need = Math.sign(alpha) * 1e3;
     const can = (car.turn * Math.min(1, Math.max(v, 4) / 9) * (1 - 0.3 * Math.min(1, v / car.maxSpeed))) / Math.max(v, 4);
     car.input.steer = Math.max(-1, Math.min(1, need / can));
     car.input.drift = 0;
@@ -159,6 +161,7 @@ export class Driver {
     /* עזרת ההשלמה (boost מעל 1) פועלת רק בישורות — בפנייה התכנון כבר על גבול האחיזה */
     const planned = Math.min(plan[i], plannedAhead);
     let target = boost > 1 && planned < car.maxSpeed * 0.97 ? planned : planned * boost;
+    car.topScale = boost > 1 ? boost : 1; // הפיזיקה מגבילה למהירות המרבית — העזרה מרימה את התקרה עצמה
     if (this.avoid !== 0 && Math.abs(want) > 0) target *= 0.98; // באמצע עקיפה — בלי להתפרע
 
     /* ניטרו: רק כשלפנינו ישורת ארוכה שבה התכנון מרשה לנסוע מהר מהמהירות הנוכחית */
@@ -169,8 +172,11 @@ export class Driver {
     if (this.usingNitro && (car.nitro < 0.03 || minAhead < car.maxSpeed * 0.9)) this.usingNitro = false;
     if (this.usingNitro || car.padBoost > 0) target = Math.max(target, Math.min(minAhead * 1.28, car.maxSpeed * 1.28));
     if (this.cruise) {
-      target = Math.min(target, this.cruise);
+      /* אחרי הסיום: מגלגלים ומאטים בעדינות — בלי בלימת חירום מול מי שבא מאחור */
       this.usingNitro = false;
+      car.topScale = 1;
+      Object.assign(car.input, { nitro: 0, gas: v < this.cruise ? 1 : 0, brake: v > this.cruise + 15 ? 0.15 : 0 });
+      return;
     }
 
     car.input.nitro = this.usingNitro ? 1 : 0;

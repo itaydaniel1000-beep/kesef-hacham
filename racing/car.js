@@ -70,6 +70,7 @@ export class Car {
     this.groundHeight = undefined;
     this.airCooldown = 0;
     this.hitWall = false;
+    this.topScale = 1;       // עזרת השלמה לבוטים שמאחור (ai.js)
     this.trackIndex = 0;
     this.lateral = 0;
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
@@ -206,7 +207,7 @@ export class Car {
     this.padBoost = Math.max(0, this.padBoost - dt);
     const boosted = this.nitroOn || this.padBoost > 0;
 
-    let top = this.maxSpeed * (offRoad ? 0.48 : 1) * (boosted ? 1.28 : 1) * (this.drafting ? 1.04 : 1);
+    let top = this.maxSpeed * this.topScale * (offRoad ? 0.48 : 1) * (boosted ? 1.28 : 1) * (this.drafting ? 1.04 : 1);
 
     if (this.grounded) {
       if (gas > 0 || boosted) {

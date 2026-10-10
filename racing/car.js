@@ -57,8 +57,9 @@ export async function loadCarModel() {
   ]);
   const draco = new DRACOLoader().setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/");
   const loader = new GLTFLoader().setDRACOLoader(draco);
-  const [gltf, ao] = await Promise.all([
+  const [gltf, farGltf, ao] = await Promise.all([
     loader.loadAsync("assets/ferrari.glb"),
+    loader.loadAsync("assets/ferrari_far.glb"), // גרסה מפושטת (כ-17 אלף משולשים) למכוניות רחוקות
     new THREE.TextureLoader().loadAsync("assets/ferrari_ao.png")
   ]);
   draco.dispose();
@@ -68,18 +69,26 @@ export async function loadCarModel() {
     const o = model.getObjectByName(name);
     o?.parent.remove(o);
   }
-  model.traverse((o) => {
-    if (!o.isMesh) return;
-    o.geometry.userData.shared = true;
-    /* בלי צבעי מותג: הצהוב והכחול הופכים לגימור כהה */
-    if (o.material.name === "Ferrari_Yellow" || o.material.name === "_0098_DodgerBlue") o.material = darkTrimMat;
-    else if (o.name === "glass") o.material = realGlassMat;
-    else shared(o.material);
-    o.castShadow = o.name === "body";
-  });
+  const far = farGltf.scene;
+  for (const m of [model, far]) {
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      /* בגרסה המפושטת אין נורמלים (בלעדיהם אפשר היה לפשט) — מחשבים חלקים, אחרת היא נראית משוננת */
+      if (!o.geometry.attributes.normal) {
+        o.geometry.computeVertexNormals();
+        o.material.flatShading = false;
+      }
+      o.geometry.userData.shared = true;
+      /* בלי צבעי מותג: הצהוב והכחול הופכים לגימור כהה */
+      if (o.material.name === "Ferrari_Yellow" || o.material.name === "_0098_DodgerBlue") o.material = darkTrimMat;
+      else if (o.name === "glass") o.material = realGlassMat;
+      else shared(o.material);
+      o.castShadow = o.name === "body";
+    });
+  }
   ao.colorSpace = THREE.SRGBColorSpace;
   shared(ao);
-  realCar = { model, ao };
+  realCar = { model, far, ao };
 }
 
 /* צבע מכונית: לכה עם שכבת ברק (clearcoat) — משקפת את השמיים */
@@ -251,32 +260,36 @@ export class Car {
 
   /* הדגם האמיתי מקרוב, והדגם הפשוט מרחוק (LOD) — תשע מכוניות מפורטות כבדות מדי לטלפון */
   useRealModel(car, body, s, paint) {
-    const simple = new THREE.Group();
-    for (const o of [...body.children]) if (o !== this.flames) simple.add(o);
-    for (const p of [...this.wheels.map((w) => w.parent)]) simple.add(p);
+    /* הדגם הפשוט מצורות נשאר רק כגיבוי לטעינה שנכשלה — כאן הוא כבר לא צריך להיות בסצנה */
+    for (const o of [...body.children]) if (o !== this.flames) body.remove(o);
+    for (const w of this.wheels) car.remove(w.parent);
+    this.wheels = [];
+    this.frontPivots = [];
 
-    const real = realCar.model.clone(true);
     const k = Math.max(0.9, s.len / 4.54);
-    real.scale.setScalar(k);
-    real.rotation.y = Math.PI; // הדגם בנוי עם החרטום לכיוון -z
-    real.getObjectByName("body").material = paint;
-    for (const name of ["lights_red", "brakes"]) {
-      const o = real.getObjectByName(name);
-      if (o) o.material = this.tailMat;
-    }
     this.realWheels = [];
     this.realFront = [];
-    for (const name of ["wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr"]) {
-      const w = real.getObjectByName(name);
-      w.rotation.order = "YXZ"; // קודם סיבוב הגלגל, אחר כך ההיגוי
-      this.realWheels.push(w);
-      if (name.startsWith("wheel_f")) this.realFront.push(w);
-    }
     this.realRadius = 0.36 * k;
-
+    /* מקרוב — הדגם המלא; מרחוק — אותה מכונית בגרסה מפושטת */
     const lod = new THREE.LOD();
-    lod.addLevel(real, 0);
-    lod.addLevel(simple, this.detail);
+    for (const [source, distance] of [[realCar.model, 0], [realCar.far, this.detail]]) {
+      const real = source.clone(true);
+      real.scale.setScalar(k);
+      real.rotation.y = Math.PI; // הדגם בנוי עם החרטום לכיוון -z
+      real.getObjectByName("body").material = paint;
+      for (const name of ["lights_red", "brakes"]) {
+        const o = real.getObjectByName(name);
+        if (o) o.material = this.tailMat;
+      }
+      for (const name of ["wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr"]) {
+        const w = real.getObjectByName(name);
+        if (!w) continue;
+        w.rotation.order = "YXZ"; // קודם סיבוב הגלגל, אחר כך ההיגוי
+        this.realWheels.push(w);
+        if (name.startsWith("wheel_f")) this.realFront.push(w);
+      }
+      lod.addLevel(real, distance);
+    }
     body.add(lod);
 
     /* צל מגע אמיתי (אפייה של חסימת אור) במקום העיגול */

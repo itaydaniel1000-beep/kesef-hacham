@@ -198,6 +198,7 @@ export class Car {
     this.maxSpeed = spec.maxSpeed * speedScale;
     this.accel = spec.accel * speedScale;
     this.turn = spec.turn;
+    this.turnScale = 1; // רגישות ההיגוי מההגדרות (רק אצל השחקן)
     this.gripRate = spec.grip;
 
     this.input = { gas: 0, brake: 0, steer: 0, drift: 0, nitro: 0 };
@@ -491,7 +492,7 @@ export class Car {
     /* פנייה: אפס בעמידה, הכי חד במהירות בינונית, קצת פחות במהירות גבוהה; בדריפט חד יותר */
     const grip = Math.min(1, sp / 9) * (1 - 0.3 * Math.min(1, sp / this.maxSpeed));
     const air = this.grounded ? 1 : 0.25;
-    const turnRate = this.turn * (this.drifting ? 1.45 : 1) * (onIce ? 0.8 : 1);
+    const turnRate = this.turn * this.turnScale * (this.drifting ? 1.45 : 1) * (onIce ? 0.8 : 1);
     this.heading += this.steer * turnRate * grip * Math.sign(this.speed) * air * dt;
 
     /* כיוון התנועה נגרר אחרי האף. אחיזה חלשה = החלקה */

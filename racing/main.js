@@ -48,7 +48,10 @@ const LEVELS = {
   hard: { name: "קשה", skill: 0.98, ahead: 0, behind: 0.08 }
 };
 
-const settings = { track: "forest", type: "grip", color: COLORS[0].color, level: "normal", muted: false, music: true };
+const settings = {
+  track: "forest", type: "grip", color: COLORS[0].color, level: "normal", muted: false, music: true,
+  musicVol: 100, sfxVol: 100, steer: 100, quality: "auto", autoLevel: null, vibrate: true
+};
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem("racing-settings") || "{}"));
 } catch {
@@ -60,6 +63,7 @@ let currentTrackId = findTrack(params.get("track") || settings.track).id;
 if (!CAR_TYPES[settings.type]) settings.type = "grip";
 if (!LEVELS[settings.level]) settings.level = "normal";
 if (!COLORS.some((c) => c.color === settings.color)) settings.color = COLORS[0].color;
+if (!["auto", "low", "medium", "high"].includes(settings.quality)) settings.quality = "auto";
 
 function saveSettings() {
   try {
@@ -130,10 +134,38 @@ sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
+/* ===== איכות גרפיקה: נמוכה / בינונית / גבוהה. "אוטומטי" מתחיל לפי המכשיר ויורד אם המשחק מקרטע ===== */
+const QUALITY = {
+  low: { ratio: 1, shadows: false, shadowSize: 512, scenery: 230, detail: 12 },
+  medium: { ratio: 1.25, shadows: true, shadowSize: 1024, scenery: 320, detail: 25 },
+  high: { ratio: coarse ? 1.5 : 2, shadows: true, shadowSize: coarse ? 1024 : 2048, scenery: 420, detail: coarse ? 18 : 45 }
+};
+let quality = QUALITY.high;
+const qualityLevel = () => (settings.quality === "auto" ? settings.autoLevel || (coarse ? "medium" : "high") : settings.quality);
+function applyQuality() {
+  const q = QUALITY[qualityLevel()];
+  const shadowsChanged = q.shadows !== quality.shadows || q.shadowSize !== quality.shadowSize;
+  quality = q;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q.ratio));
+  renderer.shadowMap.enabled = q.shadows;
+  sun.castShadow = q.shadows;
+  if (shadowsChanged) {
+    sun.shadow.mapSize.setScalar(q.shadowSize);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    /* החומרים צריכים להתקמפל מחדש עם/בלי צללים */
+    scene.traverse((o) => {
+      for (const m of [].concat(o.material || [])) m.needsUpdate = true;
+    });
+  }
+}
+applyQuality();
+
 const particles = new Particles(scene);
 const confetti = new Particles(scene, 100); // מאגר נפרד, כדי שעשן ולהבות לא ימחקו את קונפטי הניצחון
 const audio = new GameAudio();
 audio.muted = settings.muted;
+audio.setVolumes(settings.musicVol / 100, settings.sfxVol / 100);
 audio.musicOn = settings.music;
 
 /* ---------- מסלול ומכוניות ---------- */
@@ -198,6 +230,7 @@ function buildCars(roster = null) {
   const mine = COLORS.find((c) => c.color === settings.color);
   player = new Car({ name: "אני", color: mine.color, type: settings.type, detail: 1e6 });
   player.brakeDrifts = true;
+  player.turnScale = settings.steer / 100;
   /* היריבים מקבלים את הצבעים שלא בחרת. כל אחד מעט שונה: סוג מכונית, מהירות, נטייה בקו ואומץ בפניות */
   const others = COLORS.filter((c) => c !== mine);
   const types = ["speed", "grip", "accel"];
@@ -207,7 +240,7 @@ function buildCars(roster = null) {
     /* כל בוט מקבל באקראי אחת משלוש המכוניות שגם אתה יכול לבחור — עם אותם נתונים בדיוק */
     const car = new Car({
       name: others[i].name, color: others[i].color, type: types[Math.floor(Math.random() * types.length)],
-      detail: coarse ? 18 : 45 // בטלפון: רק היריבים הכי קרובים מפורטים
+      detail: quality.detail // רק היריבים הקרובים מפורטים (בטלפון ובאיכות נמוכה — עוד פחות)
     });
     rivals.push(car);
     drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.005 }));
@@ -394,6 +427,7 @@ function startRace() {
   race = new Race(track, cars, player);
   items.reset(cars);
   items.net = mpRoster ? itemNet : null;
+  Object.assign(fpsProbe, { frames: 0, time: 0, done: false });
   netTimer = 0;
   state = "countdown";
   countdown = 3.999;
@@ -488,7 +522,7 @@ addEventListener("keydown", (e) => {
   /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
   /* על "למוסך" או על "איך נוהגים?" Enter עושה את מה שהם עושים — לא מתחיל מירוץ */
   if (e.target instanceof Element && e.target.closest("#garageButton, summary")) return;
-  if (e.code === "Enter" && !mpRoster && $("mp").classList.contains("hidden") && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
+  if (e.code === "Enter" && !mpRoster && $("mp").classList.contains("hidden") && $("settingsPanel").classList.contains("hidden") && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
     e.preventDefault();
     startRace();
   }
@@ -796,7 +830,7 @@ function updateCamera(dt, target, orbit = 0) {
   if (track.sky) track.sky.position.set(camera.position.x, 0, camera.position.z);
   if (track.sceneryChunks) {
     for (const c of track.sceneryChunks) {
-      c.group.visible = Math.abs(c.x - camera.position.x) < 420 && Math.abs(c.z - camera.position.z) < 420;
+      c.group.visible = Math.abs(c.x - camera.position.x) < quality.scenery && Math.abs(c.z - camera.position.z) < quality.scenery;
     }
   }
   /* השמש וצלה עוקבים אחרי המכונית */
@@ -907,6 +941,7 @@ function frame(now) {
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)) * TIME_SCALE;
   last = now;
   lastFrameAt = performance.now();
+  probeFps(dt / TIME_SCALE);
 
   if (state === "paused") {
     /* בהשהיה לא מציירים בכל פריים — רק פעמיים בשנייה, למקרה שהדפדפן ניקה את התמונה */
@@ -986,11 +1021,12 @@ function buildRosterCars(roster) {
   drivers = [];
   roster.forEach((e, i) => {
     const mine = e.id === room.myId;
-    const car = new Car({ name: e.name, color: e.color, type: e.type, detail: mine ? 1e6 : coarse ? 18 : 45 });
+    const car = new Car({ name: e.name, color: e.color, type: e.type, detail: mine ? 1e6 : quality.detail });
     car.netId = e.id;
     if (mine) {
       player = car;
       player.brakeDrifts = true;
+      player.turnScale = settings.steer / 100;
     } else if (e.bot && room.isHost) {
       rivals.push(car);
       drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.005 }));
@@ -1311,22 +1347,109 @@ for (const def of TRACKS) {
   $("mpTrackPicker").append(btn);
 }
 
+/* ===== רטט בטלפון (מההגדרות) ===== */
+function vibrate(pattern) {
+  if (isTouch && settings.vibrate && navigator.vibrate) navigator.vibrate(pattern);
+}
+
+/* ===== איכות אוטומטית: מודדים את קצב הפריימים ב-5 השניות הראשונות של כל מירוץ ===== */
+const fpsProbe = { frames: 0, time: 0, done: false };
+function probeFps(realDt) {
+  if (settings.quality !== "auto" || fpsProbe.done || state !== "race") return;
+  fpsProbe.frames++;
+  fpsProbe.time += realDt;
+  if (fpsProbe.time < 5) return;
+  fpsProbe.done = true;
+  const fps = fpsProbe.frames / fpsProbe.time;
+  const order = ["high", "medium", "low"];
+  const level = qualityLevel();
+  if (fps < 35 && level !== "low") {
+    settings.autoLevel = order[order.indexOf(level) + 1];
+    saveSettings();
+    applyQuality();
+  }
+}
+
+/* ===== מסך ההגדרות ===== */
+function openSettings() {
+  $("setMusic").value = settings.musicVol;
+  $("setSfx").value = settings.sfxVol;
+  $("setSteer").value = settings.steer;
+  $("setVibrate").checked = settings.vibrate;
+  markSelected($("setQuality"), (b) => b.dataset.id === settings.quality);
+  updateQualityNote();
+  show("menu", false);
+  show("settingsPanel", true);
+}
+function updateQualityNote() {
+  const names = { low: "נמוכה", medium: "בינונית", high: "גבוהה" };
+  $("qualityNote").textContent = settings.quality === "auto" ? `כרגע: ${names[qualityLevel()]} — יורדת לבד אם המשחק מקרטע` : "";
+}
+$("settingsButton").addEventListener("click", openSettings);
+$("settingsClose").addEventListener("click", () => {
+  saveSettings();
+  show("settingsPanel", false);
+  show("menu", true);
+});
+for (const id of ["setMusic", "setSfx"]) {
+  $(id).addEventListener("input", () => {
+    settings.musicVol = Number($("setMusic").value);
+    settings.sfxVol = Number($("setSfx").value);
+    audio.setVolumes(settings.musicVol / 100, settings.sfxVol / 100);
+  });
+}
+$("setSteer").addEventListener("input", (e) => {
+  settings.steer = Number(e.target.value);
+  player.turnScale = settings.steer / 100;
+});
+$("setVibrate").addEventListener("change", (e) => {
+  settings.vibrate = e.target.checked;
+  vibrate(60);
+});
+for (const btn of $("setQuality").querySelectorAll("button")) {
+  btn.addEventListener("click", () => {
+    settings.quality = btn.dataset.id;
+    if (settings.quality === "auto") settings.autoLevel = null; // מתחילים למדוד מחדש
+    markSelected($("setQuality"), (b) => b === btn);
+    applyQuality();
+    updateQualityNote();
+    buildCars(); // מרחק הפירוט של המכוניות תלוי באיכות
+  });
+}
+
+/* ===== מסך טעינה עם התקדמות ===== */
+function loadingStep(promise, label) {
+  return promise.finally(() => {
+    loadingDone++;
+    $("loadingFill").style.width = `${Math.round((loadingDone / loadingTotal) * 100)}%`;
+    $("loadingText").textContent = label;
+  });
+}
+let loadingDone = 0;
+const loadingTotal = 4;
+
 /* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */
 const startButton = $("startButton");
 const startLabel = startButton.textContent;
 startButton.disabled = true;
 startButton.textContent = "טוען…";
+$("loadingText").textContent = "טוען מכוניות, נוף ותאורה…";
 await Promise.all([
-  loadCarModel().catch((e) => console.warn("car model:", e)),
-  loadSceneryModels().catch((e) => console.warn("scenery models:", e)),
-  loadPhotoEnvironment().catch((e) => console.warn("environment:", e))
+  loadingStep(loadCarModel().catch((e) => console.warn("car model:", e)), "המכוניות מוכנות"),
+  loadingStep(loadSceneryModels().catch((e) => console.warn("scenery models:", e)), "הנוף מוכן"),
+  loadingStep(loadPhotoEnvironment().catch((e) => console.warn("environment:", e)), "התאורה מוכנה")
 ]);
+$("loadingText").textContent = "בונה את המסלול…";
+await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))); // שהטקסט יופיע לפני הבנייה הכבדה
 startButton.disabled = false;
 startButton.textContent = startLabel;
 
 useTrack(currentTrackId);
 buildCars();
 buildGarage();
+loadingDone = loadingTotal;
+$("loadingFill").style.width = "100%";
+setTimeout(() => $("loading").classList.add("done"), 150);
 requestAnimationFrame(frame);
 
 /* חשיפה לבדיקות אוטומטיות */

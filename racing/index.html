@@ -66,7 +66,10 @@
   <!-- ===== מוסך: בחירת מסלול, מכונית, צבע וקושי ===== -->
   <div id="menu" class="overlay">
     <div class="card card-wide">
-      <button id="mpButton" class="mp-button" type="button">מולטיפלייר</button>
+      <div class="corner-buttons">
+        <button id="mpButton" class="mp-button" type="button">מולטיפלייר</button>
+        <button id="settingsButton" class="mp-button" type="button">הגדרות</button>
+      </div>
       <div class="title-row">
         <div class="badge">🏁</div>
         <div>
@@ -107,6 +110,38 @@
 
       <button id="startButton" class="primary-button">יוצאים למירוץ</button>
       <p class="credits">מכוניות ונוף: נוצרו ב-Meshy AI · דשא: ambientCG (CC0) · תאורת שמיים: Poly Haven (CC0)</p>
+    </div>
+  </div>
+
+  <!-- ===== טעינה ===== -->
+  <div id="loading" class="loading">
+    <div class="loading-box">
+      <h1>מירוץ תלת-ממד</h1>
+      <div class="loading-bar"><div id="loadingFill"></div></div>
+      <p id="loadingText" class="lead">טוען…</p>
+    </div>
+  </div>
+
+  <!-- ===== הגדרות ===== -->
+  <div id="settingsPanel" class="overlay hidden">
+    <div class="card">
+      <h1>הגדרות</h1>
+      <div class="settings-list">
+        <label class="setting">עוצמת מוזיקה <input id="setMusic" type="range" min="0" max="100" step="5"></label>
+        <label class="setting">עוצמת אפקטים ומנוע <input id="setSfx" type="range" min="0" max="100" step="5"></label>
+        <label class="setting">רגישות היגוי <input id="setSteer" type="range" min="60" max="140" step="5"></label>
+        <div class="setting">איכות גרפיקה
+          <div id="setQuality" class="segmented">
+            <button type="button" data-id="auto">אוטומטי</button>
+            <button type="button" data-id="low">נמוכה</button>
+            <button type="button" data-id="medium">בינונית</button>
+            <button type="button" data-id="high">גבוהה</button>
+          </div>
+          <small id="qualityNote" class="setting-note"></small>
+        </div>
+        <label class="setting setting-row touch-only-flex"><input id="setVibrate" type="checkbox"> רטט בהתנגשויות</label>
+      </div>
+      <button id="settingsClose" class="primary-button" type="button">סגירה</button>
     </div>
   </div>
 

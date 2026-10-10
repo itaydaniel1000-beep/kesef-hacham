@@ -19,6 +19,8 @@ export class GameAudio {
     this.ctx = null;
     this.muted = false;
     this.musicOn = true;
+    this.musicVolume = 1; // מסך ההגדרות: עוצמת מוזיקה ועוצמת אפקטים, 0 עד 1
+    this.sfxVolume = 1;
     this.gear = 1;
     this.rpm = IDLE_RPM;
     this.throttle = 0;
@@ -39,8 +41,12 @@ export class GameAudio {
       this.master.gain.value = this.muted ? 0 : 1;
       this.master.connect(ctx.destination);
       this.musicBus = ctx.createGain();
-      this.musicBus.gain.value = this.musicOn ? MUSIC_VOLUME : 0;
+      this.musicBus.gain.value = this.musicOn ? MUSIC_VOLUME * this.musicVolume : 0;
       this.musicBus.connect(this.master);
+      /* כל מה שאינו מוזיקה (מנוע, אפקטים) עובר דרך ערוץ אחד — כך יש לו עוצמה משלו */
+      this.sfx = ctx.createGain();
+      this.sfx.gain.value = this.sfxVolume;
+      this.sfx.connect(this.master);
 
       /* מנוע: שלוש הקלטות מתנגנות יחד, ובכל רגע שומעים בעיקר את הקרובה לסל"ד הנוכחי */
       this.engineGain = ctx.createGain();
@@ -49,7 +55,7 @@ export class GameAudio {
       this.engineFilter.type = "lowpass";
       this.engineFilter.frequency.value = 1200;
       this.engineFilter.Q.value = 0.7;
-      this.engineFilter.connect(this.engineGain).connect(this.master);
+      this.engineFilter.connect(this.engineGain).connect(this.sfx);
       this.loadEngine();
 
       /* רעש לבן משותף לחריקה, מכות ווש */
@@ -68,7 +74,7 @@ export class GameAudio {
       band.Q.value = 3;
       this.screechGain = ctx.createGain();
       this.screechGain.gain.value = 0;
-      screech.connect(band).connect(this.screechGain).connect(this.master);
+      screech.connect(band).connect(this.screechGain).connect(this.sfx);
       screech.start();
 
       /* רחש כביש, רוח, וחצץ כשיוצאים מהכביש — כל אחד רעש בלולאה עם מסנן משלו */
@@ -98,7 +104,22 @@ export class GameAudio {
 
   setMusic(on) {
     this.musicOn = on;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? MUSIC_VOLUME : 0, this.ctx.currentTime, 0.1);
+    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? MUSIC_VOLUME * this.musicVolume : 0, this.ctx.currentTime, 0.1);
+  }
+
+  setVolumes(music, sfx) {
+    this.musicVolume = music;
+    this.sfxVolume = sfx;
+    if (!this.ctx) return;
+    this.musicBus.gain.setTargetAtTime(this.musicOn ? MUSIC_VOLUME * music : 0, this.ctx.currentTime, 0.05);
+    this.sfx.gain.setTargetAtTime(sfx, this.ctx.currentTime, 0.05);
+  }
+
+  /* "טיק" של גלגל מזל — קצר וחד; גבוה יותר כשהגלגל נעצר */
+  tick(last = false) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(last ? 1320 : 1760, t, last ? 0.18 : 0.035, { type: "triangle", gain: last ? 0.12 : 0.07 });
   }
 
   noiseLayer(type, freq, q) {
@@ -113,7 +134,7 @@ export class GameAudio {
     f.Q.value = q;
     const g = ctx.createGain();
     g.gain.value = 0;
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(this.sfx);
     src.start(0, Math.random());
     return { gain: g, filter: f };
   }
@@ -252,7 +273,7 @@ export class GameAudio {
     const g = ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + duration);
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(this.sfx);
     src.start(t, Math.random() * 0.5);
     src.stop(t + duration + 0.05);
   }
@@ -267,7 +288,7 @@ export class GameAudio {
     g.gain.setValueAtTime(0, start);
     g.gain.linearRampToValueAtTime(gain, start + 0.01);
     g.gain.exponentialRampToValueAtTime(0.001, start + duration);
-    o.connect(g).connect(bus || this.master);
+    o.connect(g).connect(bus || this.sfx);
     o.start(start);
     o.stop(start + duration + 0.05);
   }
@@ -283,7 +304,7 @@ export class GameAudio {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.3 * strength, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfx);
     o.start(t);
     o.stop(t + 0.3);
   }

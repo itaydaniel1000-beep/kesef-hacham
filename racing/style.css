@@ -739,10 +739,8 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 
 /* ===== מולטיפלייר ===== */
 .card-wide { position: relative; }
+.corner-buttons { position: absolute; top: 18px; left: 18px; display: flex; gap: 8px; }
 .mp-button {
-  position: absolute;
-  top: 18px;
-  left: 18px;
   font-family: var(--f-display);
   font-weight: 800;
   font-size: .95rem;
@@ -791,8 +789,34 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 #mpPlayers li .tag { font-size: .8rem; color: var(--ink-soft); margin-inline-start: 6px; }
 @media (max-width: 560px) {
   .mp-options { grid-template-columns: 1fr; }
-  .mp-button { top: 12px; left: 12px; padding: 7px 12px; font-size: .85rem; }
+  .corner-buttons { top: 12px; left: 12px; }
+  .mp-button { padding: 7px 12px; font-size: .85rem; }
 }
 .mp-random { grid-template-columns: 1fr auto; align-items: center; margin-bottom: 14px; border-color: var(--brand); background: var(--brand-soft); }
 .mp-random .primary-button { width: auto !important; }
 @media (max-width: 560px) { .mp-random { grid-template-columns: 1fr; } .mp-random .primary-button { width: 100% !important; } }
+
+/* ===== טעינה ===== */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, #1a2130, #07090d);
+  transition: opacity .4s ease;
+}
+.loading.done { opacity: 0; pointer-events: none; }
+.loading-box { width: min(420px, 86vw); text-align: center; }
+.loading-bar { height: 10px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; margin: 18px 0 10px; }
+#loadingFill { height: 100%; width: 0; background: linear-gradient(90deg, var(--brand), #ff7a00); transition: width .3s ease; }
+
+/* ===== הגדרות ===== */
+.settings-list { display: grid; gap: 16px; margin: 14px 0 20px; text-align: right; }
+.setting { display: grid; gap: 8px; font-weight: 700; }
+.setting input[type="range"] { width: 100%; accent-color: var(--brand); }
+.setting-row { display: flex; align-items: center; gap: 10px; }
+.setting-row input { width: 20px; height: 20px; accent-color: var(--brand); }
+.setting-note { color: var(--ink-soft); font-weight: 600; }
+.touch-only-flex { display: none; }
+body.touch .touch-only-flex { display: flex; }

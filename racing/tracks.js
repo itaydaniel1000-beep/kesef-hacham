@@ -1,112 +1,201 @@
 /* ===== הגדרות המסלולים: צורה, גובה, צבעים ותוספות =====
-   המסלולים ארוכים מאוד (כ-34,000 יחידות), ולכן הם נבנים מנוסחה ולא נקודה-נקודה:
-   לולאה גדולה ולא סימטרית, ועליה קטעים של פיתולים חדים לסירוגין עם קטעים מהירים. */
+   המסלולים מקוריים, ונכתבים כמו שמעצבי מסלולים במשחקי מרוצים חושבים: רצף של קטעים בעלי שם —
+   ישורת, פנייה, סיכת ראש, פיתולי S, שיקנה, קפיצה. "צב" עובר לאורך הקטעים ומפיל נקודות בקרה,
+   ובסוף עקומה חלקה סוגרת את הלולאה בחזרה לקו הזינוק. */
 
 import { PALETTE } from "./toon.js";
 
-const TAU = Math.PI * 2;
-const smooth = (a, b, x) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
+const STEP = 12;               // מרחק בין נקודות בקרה
+const DEG = Math.PI / 180;
 
-/* לולאה סביב מרכז: כל זווית מקבלת רדיוס אחד בלבד, ולכן המסלול אף פעם לא חוצה את עצמו.
-   הפיתולים הם גלים ברדיוס (פנימה-החוצה), ו"שער" קובע איפה יש פיתולים ואיפה קטע מהיר */
-function meanderLoop({ R0, shape, waves, amp, sections, height = () => 0, perWave = 16 }) {
-  const K = waves * perWave;
-  const pts = [];
-  for (let k = 0; k < K; k++) {
-    const th = (k / K) * TAU;
-    let r = R0;
-    for (const [n, a, ph] of shape) r += R0 * a * Math.sin(n * th + ph);
-    /* שער: 0 בקטעים המהירים (כולל קו הסיום בזווית 0), 1 בקטעי הפיתולים */
-    const gate = smooth(0.15, 0.55, 0.5 - 0.5 * Math.cos(sections * th));
-    /* אורך הגל משתנה מעט לאורך המסלול, כדי שכל קטע פיתולים ירגיש אחר */
-    r += amp * gate * Math.sin(waves * th + 0.6 * Math.sin(3 * th + 0.4));
-    pts.push({ th, x: r * Math.sin(th), z: r * Math.cos(th), y: height(th, gate) });
+class Pen {
+  constructor() {
+    this.x = 0;
+    this.z = 0;
+    this.y = 0;
+    this.h = 0;                 // כיוון: 0 = לאורך ‎+z, כמו בכל המשחק
+    this.pts = [[0, 0, 0]];
   }
-  return pts;
-}
 
-/* מכניס קפיצה (רמפה עם שפה חדה) לקטע מהיר: מוחק את נקודות הבקרה שבאזור ושם במקומן את הרמפה */
-function addJump(pts, th) {
-  let i = 0;
-  while (i < pts.length - 1 && pts[i + 1].th < th) i++;
-  const a = pts[(i - 1 + pts.length) % pts.length], b = pts[(i + 1) % pts.length];
-  const len = Math.hypot(b.x - a.x, b.z - a.z);
-  const tx = (b.x - a.x) / len, tz = (b.z - a.z) / len;
-  const p = pts[i];
-  /* אותה רמפה שנבדקה במסלול הקודם: כ-22% עד השפה ואז נפילה */
-  const ramp = [[-70, 0], [-16, 0], [0, 1.4], [14, 4.6], [19, 5.6], [26, 3.2], [38, 0], [54, 0], [110, 0]];
-  const keep = pts.filter((q) => {
-    const d = (q.x - p.x) * tx + (q.z - p.z) * tz;
-    const side = Math.abs((q.x - p.x) * tz - (q.z - p.z) * tx);
-    return !(d > -95 && d < 135 && side < 60);
-  });
-  const at = keep.findIndex((q) => (q.x - p.x) * tx + (q.z - p.z) * tz > 0 && q.th > th - 0.2);
-  const inserted = ramp.map(([d, y]) => ({ th, x: p.x + tx * d, z: p.z + tz * d, y }));
-  keep.splice(at < 0 ? keep.length : at, 0, ...inserted);
-  return keep;
-}
-
-/* שמינייה ענקית: x = sin t, z = sin 2t, ועליה פיתולים לאורך הלולאות. בחצייה השנייה — גשר */
-function figureEight({ A, B, waves, amp }) {
-  const K = waves * 16;
-  const pts = [];
-  const start = -0.12; // קו הסיום ממש לפני הצומת, בקטע התחתון
-  for (let k = 0; k < K; k++) {
-    const t = start + (k / K) * TAU;
-    const toCross = Math.min(Math.abs(Math.sin(t)), 1);            // 0 בשני מעברי הצומת
-    const fromBridge = Math.abs(Math.atan2(Math.sin(t - Math.PI), Math.cos(t - Math.PI)));
-    const rampT = Math.min(1, Math.max(0, (0.13 - fromBridge) / 0.08));
-    const y = 8.5 * rampT * rampT * (3 - 2 * rampT);
-    /* נקודה על השמינייה, והכיוון הניצב לה — הפיתולים זזים לאורך הניצב */
-    const x0 = -A * Math.sin(t), z0 = B * Math.sin(2 * t);
-    const dx = -A * Math.cos(t), dz = 2 * B * Math.cos(2 * t);
-    const dl = Math.hypot(dx, dz);
-    const gate = smooth(0.32, 0.6, toCross) * smooth(0.25, 0.75, 0.5 - 0.5 * Math.cos(6 * t + 0.5));
-    const w = amp * gate * Math.sin(waves * t + 0.5 * Math.sin(2 * t));
-    pts.push({ th: t, x: x0 + (dz / dl) * w, z: z0 - (dx / dl) * w, y });
+  dot(y) {
+    this.pts.push([Math.round(this.x * 10) / 10, Math.round(this.z * 10) / 10, Math.round(y * 10) / 10]);
   }
-  return pts;
+
+  /* ישורת, עם גובה יעד בסופה */
+  straight(len, y = this.y) {
+    const n = Math.max(1, Math.ceil(len / STEP));
+    const y0 = this.y;
+    for (let k = 1; k <= n; k++) {
+      this.x += (Math.sin(this.h) * len) / n;
+      this.z += (Math.cos(this.h) * len) / n;
+      this.dot(y0 + ((y - y0) * k) / n);
+    }
+    this.y = y;
+    return this;
+  }
+
+  /* פנייה: מעלות חיוביות = שמאלה, שליליות = ימינה */
+  turn(deg, radius, y = this.y) {
+    const total = deg * DEG;
+    const n = Math.max(2, Math.ceil((Math.abs(total) * radius) / STEP));
+    const d = total / n;
+    const chord = 2 * radius * Math.sin(Math.abs(d) / 2);
+    const y0 = this.y;
+    for (let k = 1; k <= n; k++) {
+      const mid = this.h + d / 2;
+      this.x += Math.sin(mid) * chord;
+      this.z += Math.cos(mid) * chord;
+      this.h += d;
+      this.dot(y0 + ((y - y0) * k) / n);
+    }
+    this.y = y;
+    return this;
+  }
+
+  /* סיכת ראש: פנייה של 180 מעלות, הדוקה */
+  hairpin(dir, radius = 26, y) {
+    return this.turn(180 * dir, radius, y);
+  }
+
+  /* פיתולי S: פניות לסירוגין */
+  esses(count, deg, radius, y) {
+    const y0 = this.y;
+    for (let i = 0; i < count; i++) {
+      const sign = i % 2 ? -1 : 1;
+      const first = i === 0 || i === count - 1 ? 0.5 : 1; // חצי פנייה בהתחלה ובסוף, כדי לצאת באותו כיוון
+      this.turn(sign * deg * first, radius, y0 + ((y ?? y0) - y0) * ((i + 1) / count));
+    }
+    return this;
+  }
+
+  /* שיקנה: ימינה-שמאלה-ימינה קצר, כדי לשבור ישורת */
+  chicane(dir, deg = 40, radius = 34) {
+    return this.turn(deg * dir, radius).turn(-2 * deg * dir, radius).turn(deg * dir, radius);
+  }
+
+  /* קפיצה: אותה רמפה שנבדקה — 22% עד שפה חדה, ואז הכביש נופל */
+  jump() {
+    const ramp = [[16, 1.4], [30, 4.6], [35, 5.6], [42, 3.2], [54, 0], [70, 0]];
+    let done = 0;
+    for (const [d, y] of ramp) {
+      this.x += Math.sin(this.h) * (d - done);
+      this.z += Math.cos(this.h) * (d - done);
+      done = d;
+      this.dot(y);
+    }
+    this.y = 0;
+    return this;
+  }
+
+  /* סגירת הלולאה: עקומת הרמיט מהמקום והכיוון הנוכחיים אל קו הזינוק, שנכנסת אליו בכיוון ‎+z */
+  close(y = 0) {
+    const x0 = this.x, z0 = this.z, y0 = this.y;
+    const dist = Math.hypot(x0, z0);
+    const m = dist * 0.9;
+    const t0x = Math.sin(this.h) * m, t0z = Math.cos(this.h) * m;
+    const t1x = 0, t1z = m;
+    const n = Math.max(3, Math.ceil((dist * 1.3) / STEP));
+    for (let k = 1; k < n; k++) {
+      const s = k / n, s2 = s * s, s3 = s2 * s;
+      const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+      this.x = h00 * x0 + h10 * t0x + h11 * t1x;
+      this.z = h00 * z0 + h10 * t0z + h11 * t1z;
+      this.dot(y0 + (y - y0) * s);
+    }
+    return this.pts;
+  }
 }
 
-const asControl = (pts) => pts.map((p) => [Math.round(p.x * 10) / 10, Math.round(p.z * 10) / 10, Math.round(p.y * 10) / 10]);
+/* ---------- יער: גראנד-פרי טכני עם גבעות ----------
+   לולאה עם ארבע פינות ימינה; בכל צלע תוספת שלא משנה את הכיוון הכללי */
+const forest = new Pen()
+  .straight(1150)                         // ישורת הזינוק
+  .turn(-90, 55)                          // פינה 1: בלימה חזקה
+  .straight(260)
+  .esses(5, 100, 45, 8)                   // פיתולי S בעלייה
+  .straight(300, 10)                      // פסגה עיוורת
+  .turn(-90, 150, 4)                      // פינה 2: ירידה מהירה בפנייה רחבה
+  .straight(220, 0)
+  .chicane(1)                             // שיקנה
+  .straight(240)
+  .turn(110, 75).turn(-110, 75)           // "קרוסלה": פנייה ארוכה שמאלה ומיד ימינה
+  .straight(260)
+  /* "אצבע": יציאה הצידה, סיכת ראש, וחזרה במקביל */
+  .turn(90, 40).straight(240).hairpin(-1, 28).straight(240).turn(90, 40)
+  .straight(260)
+  .turn(-45, 70).straight(70).turn(-45, 70) // פינה 3: שני אייפקסים
+  .straight(1350)                         // הישורת האחורית
+  .esses(5, 90, 50)                       // עוד פיתולי S לפני הפינה האחרונה
+  .straight(300)
+  .turn(-90, 60)                          // פינה 4
+  .close();
 
-/* משטחי האצה פזורים לאורך המסלול, לסירוגין בצדדים */
+/* ---------- מדבר: מהיר, עם שתי קפיצות וקניון צפוף ---------- */
+const desert = new Pen()
+  .straight(650)
+  .turn(-60, 160)
+  .straight(220)
+  .jump()                                 // קפיצה ראשונה
+  .straight(260)
+  .turn(-100, 120, 3)
+  .straight(300, 6)                       // דיונה גבוהה
+  .turn(80, 140, 2)
+  .straight(250, 0)
+  /* הקניון: פניות של 90 מעלות לסירוגין בין קירות סלע */
+  .turn(-90, 34).straight(70).turn(90, 34).straight(70).turn(-90, 34).straight(70).turn(90, 34)
+  .straight(160)
+  .turn(-90, 34).straight(70).turn(90, 34)
+  .straight(160)
+  .turn(-90, 34).straight(70).turn(90, 34)
+  .straight(520)
+  .turn(-120, 110)
+  .straight(800)
+  .jump()                                 // קפיצה שנייה
+  .straight(600)
+  .turn(-75, 150)
+  .straight(360)
+  .chicane(-1, 35, 40)
+  .straight(500)
+  .close();
+
+/* ---------- שלג: שמינייה עם גשר ----------
+   לולאה ימנית, מעבר על גשר מעל ישורת הזינוק, ולולאה שמאלית עם סיכות ראש במעלה ההר */
+const snow = new Pen()
+  .straight(330)                          // ישורת הזינוק — הגשר יעבור מעליה
+  .turn(-90, 140)
+  .straight(260)
+  .esses(6, 95, 48)
+  .straight(160)
+  .turn(-90, 140)
+  .straight(850)
+  .turn(-90, 140)
+  .straight(150, 3)
+  .straight(170, 8.5)                     // עולים לגשר
+  .straight(260, 8.5)                     // הגשר — מעל ישורת הזינוק
+  .straight(170, 3)
+  .straight(150, 0)
+  .turn(90, 140)
+  /* במעלה ההר: אצבע עם סיכת ראש */
+  .straight(200)
+  .turn(90, 40).straight(230, 4).hairpin(-1, 30, 6).straight(230, 2).turn(90, 40, 0)
+  .straight(300)
+  .turn(90, 140)
+  .straight(750)
+  .turn(90, 140)
+  .straight(200)
+  .close();
+
 const padsEvery = (n, offset = 0) =>
   Array.from({ length: n }, (_, i) => [(offset + (i + 0.5) / n) % 1, [3, 0, -3][i % 3]]);
-
-const forest = meanderLoop({
-  R0: 4000,
-  shape: [[2, 0.16, 0.7], [3, 0.09, 2.1], [5, 0.04, 0.3]],
-  waves: 60,
-  amp: 112,
-  sections: 3,
-  /* גבעות: עולות ויורדות לאורך כל המסלול */
-  height: (th) => Math.max(0, 6.5 * Math.sin(9 * th + 0.8)) * smooth(0.05, 0.2, Math.min(th, TAU - th))
-});
-
-const desert = addJump(addJump(meanderLoop({
-  R0: 4000,
-  shape: [[2, 0.12, 2.4], [3, 0.12, 0.2], [4, 0.05, 1.3]],
-  waves: 60,
-  amp: 118,
-  sections: 3,
-  /* דיונות גבוהות בקטעי הפיתולים */
-  height: (th, gate) => Math.max(0, 8 * Math.sin(7 * th + 2)) * gate
-}), TAU / 3), (2 * TAU) / 3);
-
-const snow = figureEight({ A: 4500, B: 2450, waves: 66, amp: 96 });
 
 export const TRACKS = [
   {
     id: "forest",
-    name: "יער",
+    name: "גראנד-פרי היער",
     emoji: "🌲",
-    blurb: "מסלול ענק: גבעות, ישורות מהירות ושלושה קטעי פיתולים",
-    control: asControl(forest),
-    boosts: padsEvery(18),
+    blurb: "סיכות ראש, פיתולי S בעלייה, שיקנה וישורת ארוכה",
+    control: forest,
+    boosts: padsEvery(5),
     ice: [],
     bridge: null,
     theme: {
@@ -118,11 +207,11 @@ export const TRACKS = [
   },
   {
     id: "desert",
-    name: "מדבר",
+    name: "קניון השמש",
     emoji: "🌵",
-    blurb: "דיונות, פיתולים ושתי קפיצות על הישורות",
-    control: asControl(desert),
-    boosts: padsEvery(18, 0.02),
+    blurb: "מהיר: שתי קפיצות, דיונות וקניון של פניות חדות",
+    control: desert,
+    boosts: padsEvery(5, 0.05),
     ice: [],
     bridge: null,
     theme: {
@@ -134,12 +223,12 @@ export const TRACKS = [
   },
   {
     id: "snow",
-    name: "שלג",
+    name: "פסגת הקרח",
     emoji: "❄️",
-    blurb: "שמינייה ענקית עם פיתולים, גשר ומשטחי קרח",
-    control: asControl(snow),
-    boosts: padsEvery(16, 0.04),
-    ice: [[0.1, 0.13], [0.3, 0.33], [0.6, 0.63], [0.82, 0.85]],
+    blurb: "שמינייה עם גשר, סיכות ראש במעלה ההר וקרח",
+    control: snow,
+    boosts: padsEvery(4, 0.1),
+    ice: [[0.62, 0.66], [0.86, 0.9]],
     /* מכל גובה כזה ומעלה הכביש הוא גשר: בלי סוללת עפר, עם עמודים */
     bridge: { minY: 4.5 },
     theme: {

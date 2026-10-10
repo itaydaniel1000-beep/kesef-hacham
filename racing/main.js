@@ -878,8 +878,10 @@ function step(dt) {
     items.think(d.car, d, cars);
   }
   for (const car of cars) {
-    if (car.remote) car.netStep(dt); // חבר אמיתי: זז לפי מה שמגיע מהרשת
-    else car.update(dt, track, cars);
+    if (car.remote) {
+      car.netStep(dt); // חבר אמיתי: זז לפי מה שמגיע מהרשת
+      car.syncMesh(dt, track); // ...וגם הדגם שרואים זז איתו (update של מכונית רגילה עושה את זה לבד)
+    } else car.update(dt, track, cars);
   }
   resolveCollisions(cars);
   if (mpRoster) netTick(dt);

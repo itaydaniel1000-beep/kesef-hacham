@@ -9,6 +9,7 @@ import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
 import { ItemSystem, ITEMS } from "./items.js";
 import { Room } from "./net.js";
+import { Skids } from "./skids.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -162,6 +163,7 @@ function applyQuality() {
 applyQuality();
 
 const particles = new Particles(scene);
+const skids = new Skids(scene);
 const confetti = new Particles(scene, 100); // מאגר נפרד, כדי שעשן ולהבות לא ימחקו את קונפטי הניצחון
 const audio = new GameAudio();
 audio.muted = settings.muted;
@@ -428,6 +430,7 @@ function startRace() {
   items.reset(cars);
   items.net = mpRoster ? itemNet : null;
   Object.assign(fpsProbe, { frames: 0, time: 0, done: false });
+  skids.clear();
   netTimer = 0;
   state = "countdown";
   countdown = 3.999;
@@ -698,6 +701,9 @@ function rearOf(car, side) {
 function itemEffect(kind, car, pos) {
   const mine = car === player;
   const near = mine || Math.hypot(car.x - camera.position.x, car.z - camera.position.z) < 80;
+  if (kind === "boom" && !car.remote) car.damage = Math.min(1, car.damage + 0.12);
+  if (mine && kind === "boom") vibrate([90, 40, 140]);
+  else if (mine && kind === "pickup") vibrate(20);
   if (kind === "pickup" && mine) audio.beep(true);
   else if (kind === "pickup-none" && mine) audio.beep(false);
   else if (kind === "boost" && mine) {
@@ -732,6 +738,13 @@ function effects(dt) {
   for (const car of cars) {
     const near = car === player || camDist(car) < 70;
     for (const ev of car.events) {
+      /* נזק ויזואלי: כל מכה מוסיפה קצת, לפי סוג המכה */
+      if (!car.remote && (ev === "wall" || ev === "bump")) car.damage = Math.min(1, car.damage + (ev === "wall" ? 0.05 : 0.025));
+      if (car === player) {
+        if (ev === "wall") vibrate(60);
+        else if (ev === "bump") vibrate(35);
+        else if (ev === "land") vibrate(45);
+      }
       if (ev === "wall" || ev === "bump") {
         if (near) {
           for (let i = 0; i < 8; i++) {
@@ -754,7 +767,13 @@ function effects(dt) {
     }
     car.events.length = 0;
 
+    if (near) skids.update(car);
     if (!emitNow || !near) continue;
+    /* מכונית פגועה מאוד מעלה עשן מהמנוע */
+    if (car.damage > 0.6 && Math.random() < (car.damage - 0.55) * 1.5) {
+      const hx = car.x + Math.sin(car.heading) * 1.4, hz = car.z + Math.cos(car.heading) * 1.4;
+      particles.emit("smoke", hx, car.y + 1.1, hz, 0x3a3c40, { vy: 1.5, spread: 1.2 });
+    }
     const vx = -Math.sin(car.moveHeading) * car.speed * 0.15, vz = -Math.cos(car.moveHeading) * car.speed * 0.15;
     if (car.drifting) {
       for (const side of [1, -1]) {
@@ -796,14 +815,21 @@ const wantLook = new THREE.Vector3();
 let camReady = false;
 let camBack = 9.5;
 
+let lookBack = false;
 function updateCamera(dt, target, orbit = 0) {
   /* במירוץ המצלמה צמודה מאחורי האף, בלי השהיה — גם בדריפט רואים את גב המכונית */
   const dir = target.heading + orbit;
   const fx = Math.sin(dir), fz = Math.cos(dir);
   camBack += ((target.nitroOn ? 10.5 : 9.5) - camBack) * Math.min(1, dt * 5); // המצלמה מתרחקת בניטרו בהדרגה
   const back = orbit ? 14 : camBack;
-  wantPos.set(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
-  wantLook.set(target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6);
+  if (lookBack && !orbit) {
+    /* מבט אחורה: המצלמה מעל החרטום ומסתכלת לאחור */
+    wantPos.set(target.x + fx * 4.5, target.y + 3.2, target.z + fz * 4.5);
+    wantLook.set(target.x - fx * 20, target.y + 1, target.z - fz * 20);
+  } else {
+    wantPos.set(target.x - fx * back, target.y + (orbit ? 6 : 4.4), target.z - fz * back);
+    wantLook.set(target.x + Math.sin(target.heading) * 6, target.y + 1.2, target.z + Math.cos(target.heading) * 6);
+  }
   if (!camReady || !orbit) {
     camPos.copy(wantPos);
     camLook.copy(wantLook);
@@ -958,6 +984,7 @@ function frame(now) {
       acc -= STEP;
     }
     effects(dt);
+    lookBack = input.lookingBack() && !player.finished;
     updateCamera(dt, player);
     updateHud();
     audio.engine(player, true, dt);
@@ -1461,6 +1488,7 @@ window.__race = {
   get cars() { return cars; },
   get track() { return track; },
   get items() { return items; },
+  skids,
   audio,
   renderer,
   scene,

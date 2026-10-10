@@ -820,3 +820,5 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 .setting-note { color: var(--ink-soft); font-weight: 600; }
 .touch-only-flex { display: none; }
 body.touch .touch-only-flex { display: flex; }
+.touch-look { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: 46px; height: 46px; font-size: 1.3rem; }
+.touch-look.active { transform: translateX(-50%) scale(.94); }

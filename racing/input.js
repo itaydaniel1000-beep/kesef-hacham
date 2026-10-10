@@ -6,13 +6,14 @@ const KEYS = {
   ArrowLeft: "left", KeyA: "left",
   ArrowRight: "right", KeyD: "right",
   Space: "drift",
+  KeyC: "look",
   ShiftLeft: "nitro", ShiftRight: "nitro", KeyN: "nitro"
 };
 
 export class Input {
   constructor() {
-    this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
-    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, item: false };
+    this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, look: false };
+    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, item: false, look: false };
     this.capture = false; // main.js מדליק את זה בזמן מירוץ
 
     this.itemPressed = false;
@@ -72,6 +73,11 @@ export class Input {
     const pressed = this.itemPressed;
     this.itemPressed = false;
     return pressed;
+  }
+
+  /* מבט אחורה (C / כפתור במגע) — מחזיקים כדי לראות מי מתקרב */
+  lookingBack() {
+    return this.keys.look || this.touch.look;
   }
 
   read() {

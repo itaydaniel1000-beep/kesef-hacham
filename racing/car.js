@@ -97,33 +97,36 @@ async function loadMeshyCars(loader) {
 
 /* חומר צבע לכל סוג וצבע: פיקסלים צבעוניים בטקסטורה (הפח) מקבלים את הצבע שבחרת באותה בהירות יחסית;
    חלונות, צמיגים וכרום (אפורים/כהים) נשארים כמו שהם */
-const meshyPaints = new Map();
-function meshyPaint(type, color, map, ref) {
-  const key = `${type}:${color}:${map.uuid}`;
-  if (!meshyPaints.has(key)) {
-    const m = new THREE.MeshPhysicalMaterial({ map, roughness: 0.38, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05 });
-    const paint = new THREE.Color(color); // three ממיר ללינארי
-    m.onBeforeCompile = (shader) => {
-      shader.uniforms.paintColor = { value: paint };
-      shader.uniforms.paintRef = { value: ref };
-      shader.fragmentShader = "uniform vec3 paintColor;\nuniform float paintRef;\n" + shader.fragmentShader.replace(
-        "#include <map_fragment>",
-        `#ifdef USE_MAP
-          vec4 texel = texture2D( map, vMapUv );
-          float mx = max( texel.r, max( texel.g, texel.b ) );
-          float mn = min( texel.r, min( texel.g, texel.b ) );
-          float sat = mx > 0.0 ? ( mx - mn ) / mx : 0.0;
-          float w = smoothstep( 0.35, 0.6, sat ) * smoothstep( 0.02, 0.1, mx );
-          float lum = dot( texel.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-          vec3 painted = clamp( paintColor * ( lum / paintRef ), 0.0, 1.0 );
-          diffuseColor.rgb *= mix( texel.rgb, painted, w );
-        #endif`
-      );
-    };
-    m.customProgramCacheKey = () => "meshy-paint";
-    meshyPaints.set(key, shared(m));
-  }
-  return meshyPaints.get(key);
+/* כל מכונית מקבלת חומר משלה — כדי שהנזק (שריטות וכתמים) יהיה רק עליה. התוכנית של ה-shader משותפת */
+function meshyPaint(color, map, ref, damage) {
+  const m = new THREE.MeshPhysicalMaterial({ map, roughness: 0.38, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05 });
+  const paint = new THREE.Color(color); // three ממיר ללינארי
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.paintColor = { value: paint };
+    shader.uniforms.paintRef = { value: ref };
+    shader.uniforms.damage = damage;
+    shader.fragmentShader = "uniform vec3 paintColor;\nuniform float paintRef;\nuniform float damage;\n" + shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      `#ifdef USE_MAP
+        vec4 texel = texture2D( map, vMapUv );
+        float mx = max( texel.r, max( texel.g, texel.b ) );
+        float mn = min( texel.r, min( texel.g, texel.b ) );
+        float sat = mx > 0.0 ? ( mx - mn ) / mx : 0.0;
+        float w = smoothstep( 0.35, 0.6, sat ) * smoothstep( 0.02, 0.1, mx );
+        float lum = dot( texel.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+        vec3 painted = clamp( paintColor * ( lum / paintRef ), 0.0, 1.0 );
+        vec3 col = mix( texel.rgb, painted, w );
+        /* נזק: כתמי לכלוך ושריטות כהות שמתפשטים ככל שהמכונית חוטפת יותר */
+        float n1 = fract( sin( dot( floor( vMapUv * 64.0 ), vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+        float n2 = fract( sin( dot( floor( vMapUv * 260.0 ), vec2( 39.346, 11.135 ) ) ) * 24634.6345 );
+        float hurt = step( 1.0 - damage * 0.7, n1 ) * 0.55 + step( 1.0 - damage * 0.35, n2 ) * 0.35;
+        col *= 1.0 - clamp( hurt, 0.0, 0.75 ) * w;
+        diffuseColor.rgb *= col;
+      #endif`
+    );
+  };
+  m.customProgramCacheKey = () => "meshy-paint";
+  return m;
 }
 
 export async function loadCarModel() {
@@ -243,6 +246,7 @@ export class Car {
     this.history = [];
     this.historyTimer = 0;
     this.net = null;         // מולטיפלייר: המצב האחרון שהגיע מהרשת
+    this.damage = 0;         // נזק ויזואלי בלבד, 0 עד 1 — מתאפס בכל מירוץ
   }
 
   buildMesh(s) {
@@ -352,6 +356,7 @@ export class Car {
     this.realFront = [];
     this.realRadius = 1;
     const spec = meshyCars[this.type];
+    this.damageUniform = { value: 0 };
     const lod = new THREE.LOD();
     for (const [part, distance] of [[spec.near, 0], [spec.far, this.detail]]) {
       const size = part.box.getSize(new THREE.Vector3());
@@ -361,7 +366,7 @@ export class Car {
       real.position.y = -part.box.min.y * k + 0.02;
       real.traverse((o) => {
         if (!o.isMesh) return;
-        o.material = meshyPaint(this.type, this.color, part.mesh.material.map, spec.ref);
+        o.material = meshyPaint(this.color, part.mesh.material.map, spec.ref, this.damageUniform);
         o.castShadow = true;
       });
       lod.addLevel(real, distance);
@@ -616,11 +621,12 @@ export class Car {
     const r = (v, k = 100) => Math.round(v * k) / k;
     return [r(this.x), r(this.y), r(this.z), r(this.heading, 1000), r(this.moveHeading, 1000), r(this.speed), r(this.distance),
       this.trackIndex, r(this.lateral), this.finished ? 1 : 0, r(this.finishTime), r(this.steer), this.nitroOn ? 1 : 0,
-      r(this.padBoost), this.drifting ? 1 : 0, r(this.groundHeight ?? this.y)];
+      r(this.padBoost), this.drifting ? 1 : 0, r(this.groundHeight ?? this.y), r(this.damage)];
   }
 
   netApply(s) {
-    const [x, y, z, heading, moveHeading, speed, distance, trackIndex, lateral, finished, finishTime, steer, nitroOn, padBoost, drifting, ground] = s;
+    const [x, y, z, heading, moveHeading, speed, distance, trackIndex, lateral, finished, finishTime, steer, nitroOn, padBoost, drifting, ground, damage] = s;
+    if (damage !== undefined) this.damage = damage;
     const first = !this.net;
     this.net = { x, y, z, heading, moveHeading, speed, at: performance.now() };
     /* קפיצה גדולה (שיגור, מוקש, התחלה) — בלי החלקה */
@@ -676,6 +682,7 @@ export class Car {
 
     const flaming = this.nitroOn || this.padBoost > 0.4;
     this.flames.visible = flaming;
+    if (this.damageUniform) this.damageUniform.value = this.damage;
     this.tailMat.emissiveIntensity = this.input.brake > 0 && this.speed > 0.5 ? 3 : 0.6; // פנסי בלם
     if (flaming) {
       const f = 0.8 + Math.random() * 0.5;

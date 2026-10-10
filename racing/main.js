@@ -318,7 +318,13 @@ function show(id, on) {
   $(id).classList.toggle("hidden", !on);
 }
 
+/* כפתור שנלחץ ואז הוסתר לא נשאר בפוקוס — אחרת Enter באמצע מירוץ היה "לוחץ" עליו שוב */
+function dropFocus() {
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+}
+
 function startRace() {
+  dropFocus();
   gridUp();
   for (const d of [...drivers, autopilot, cooldownDriver]) {
     d?.reset();
@@ -366,6 +372,7 @@ function pause() {
   if (state === "finished" && !resultsShownAt) return; // מסך התוצאות כבר פתוח
   pausedFrom = state;
   state = "paused";
+  dropFocus();
   input.release();
   syncAudio();
   hudSet("lines", 0, (v) => (hud.speedlines.style.opacity = v));
@@ -378,6 +385,7 @@ function resume() {
   if (state !== "paused") return;
   state = pausedFrom;
   pausedFrom = null;
+  dropFocus();
   syncAudio();
   show("pause", false);
   show("touch", isTouch && !player.finished);
@@ -720,7 +728,7 @@ function step(dt) {
     driver.cruise = player.finished ? 15 : 0;
     driver.update(dt, track, 1, cars);
   } else {
-    player.brakeDrifts = true;
+    player.brakeDrifts = isTouch; // בטלפון אין מקש דריפט — שם בלם+היגוי מחליק; במקלדת יש רווח
     Object.assign(player.input, input.read());
   }
   for (const d of drivers) {
@@ -739,7 +747,7 @@ function step(dt) {
     show("touch", false); // מעכשיו המחשב נוהג — הכפתורים כבר לא עושים כלום
     resultsShownAt = race.time + 1.8;
     audio.fanfare(race.placeOf(player) === 1);
-    celebrate();
+    if (race.placeOf(player) <= 3) celebrate(); // קונפטי רק על הפודיום
   }
   if (state === "finished" && resultsShownAt && race.time >= resultsShownAt) {
     resultsShownAt = 0;

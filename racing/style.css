@@ -865,3 +865,32 @@ body.touch .touch-only-flex { display: flex; }
 .rewards .big { font-family: var(--f-display); font-size: 1.2rem; color: #ffc83a; }
 .rewards .record { color: #7ae0ff; }
 .rewards .levelup { color: #2ecc71; font-family: var(--f-display); font-size: 1.2rem; }
+
+/* ===== צ'אט ===== */
+.chat { position: fixed; left: 14px; bottom: 120px; width: min(360px, 70vw); z-index: 36; pointer-events: none; }
+.chat-feed { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
+.chat-feed li {
+  justify-self: start; max-width: 100%; padding: 6px 10px; border-radius: 10px;
+  background: rgba(10, 13, 19, .62); color: #fff; font-weight: 600; font-size: .92rem;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  overflow-wrap: anywhere; transition: opacity .6s ease;
+}
+.chat-feed li b { color: #7ae0ff; margin-inline-end: 6px; }
+.chat-feed li.old { opacity: 0; }
+.chat-form { pointer-events: auto; }
+.chat-form input {
+  width: 100%; font: inherit; font-size: 1rem; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .3); background: rgba(10, 13, 19, .8); color: #fff;
+}
+.chat.lobby { bottom: 16px; }
+.chat.lobby .chat-feed li.old { opacity: 1; }
+
+/* ===== צפייה ===== */
+.spectate {
+  position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 14;
+  padding: 8px 16px; border-radius: 999px; background: rgba(10, 13, 19, .7); color: #fff; font-weight: 700;
+  display: flex; gap: 8px; align-items: center;
+}
+.spectate button { font: inherit; font-size: 1.2rem; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .1); color: #fff; }
+.touch-only-inline { display: none; }
+body.touch .touch-only-inline { display: inline-block; }

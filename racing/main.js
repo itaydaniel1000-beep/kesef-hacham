@@ -611,6 +611,22 @@ $("resumeButton").addEventListener("click", resume);
 $("restartButton").addEventListener("click", startRace);
 $("quitButton").addEventListener("click", toGarage);
 addEventListener("keydown", (e) => {
+  /* כותבים בצ'אט: Escape סוגר, וכל השאר לא נוגע במשחק */
+  if (e.target === $("chatInput")) {
+    if (e.code === "Escape") closeChat();
+    return;
+  }
+  if (e.target instanceof HTMLInputElement) return;
+  /* במולטיפלייר: Enter או T פותחים את הצ'אט */
+  if (room && (e.code === "Enter" || e.code === "KeyT") && !e.repeat && (mpRoster || !$("mp").classList.contains("hidden"))) {
+    e.preventDefault();
+    openChat();
+    return;
+  }
+  if (spectating && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+    spectateIndex += e.code === "ArrowLeft" ? 1 : -1;
+    return;
+  }
   if (e.code === "Escape" || e.code === "KeyP") {
     if (e.repeat) return; // מקש מוחזק לא מהבהב בין השהיה להמשך
     if (state === "paused") resume();
@@ -1073,7 +1089,7 @@ function step(dt) {
   } else {
     player.brakeDrifts = isTouch; // בטלפון אין מקש דריפט — שם בלם+היגוי מחליק; במקלדת יש רווח
     Object.assign(player.input, input.read());
-    if (input.takeItem() && items.use(player)) stats.itemsUsed++;
+    if (input.takeItem() && !spectating && items.use(player)) stats.itemsUsed++;
   }
   for (const d of drivers) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
@@ -1119,7 +1135,7 @@ function step(dt) {
     });
     if (rewards.newRecord && mode === "trial") saveGhost(track.def.id, race.laps, ghostRec.samples);
   }
-  if (player.finished && state === "race") {
+  if (player.finished && state === "race" && !spectating) {
     state = "finished";
     show("touch", false); // מעכשיו המחשב נוהג — הכפתורים כבר לא עושים כלום
     resultsShownAt = race.time + 1.8;
@@ -1155,9 +1171,9 @@ function frame(now) {
       acc -= STEP;
     }
     effects(dt);
-    lookBack = input.lookingBack() && !player.finished;
-    updateCamera(dt, player);
-    updateHud();
+    lookBack = input.lookingBack() && !player.finished && !spectating;
+    updateCamera(dt, spectating ? spectateTarget() : player);
+    if (!spectating) updateHud();
     audio.engine(player, true, dt);
   }
 
@@ -1251,7 +1267,7 @@ function buildRosterCars(roster) {
 
 /* שליחת מיקומים: אורח שולח את שלו למארח; המארח שולח לכולם את כל המכוניות */
 function netTick(dt) {
-  if (!room) return;
+  if (!room || spectating) return;
   netTimer += dt;
   if (netTimer < NET_RATE) return;
   netTimer = 0;
@@ -1267,7 +1283,23 @@ function netTick(dt) {
 
 function onNetMessage(msg, from) {
   if (room.isHost) {
+    if (msg.t === "chat") {
+      const text = cleanChat(msg.text);
+      const name = (lobby.players.find((p) => p.id === from)?.name || "שחקן").slice(0, 14);
+      if (!text || chatFlood(from)) return;
+      addChat(name, text);
+      room.broadcast({ t: "chat", name, text }, from);
+      return;
+    }
     if (msg.t === "hello") {
+      /* חדר עם קוד שבו מירוץ כבר רץ: נכנסים לחדר (למירוץ הבא) וצופים במירוץ הנוכחי */
+      if (!lobby.public && mpRoster && race && !lobby.players.some((p) => p.id === from) && lobby.players.length < MAX_CARS) {
+        const taken = new Set(lobby.players.map((p) => p.color));
+        const color = (COLORS.find((c) => !taken.has(c.color)) || COLORS[0]).color;
+        lobby.players.push({ id: from, name: String(msg.name || "שחקן").slice(0, 14), color, type: CAR_TYPES[msg.type] ? msg.type : "grip" });
+        room.sendTo(from, { t: "spectate", track: track.def.id, laps: race.laps, roster: mpRoster, time: race.time, lobby });
+        return;
+      }
       /* חדר מלא, או שהמשחק כבר התחיל — אומרים לו לחפש חדר אחר */
       if (!lobby.players.some((p) => p.id === from) && (lobby.players.length >= roomMax() || (lobby.public && mpRoster))) {
         room.sendTo(from, { t: "full" });
@@ -1298,6 +1330,15 @@ function onNetMessage(msg, from) {
     show("mpStart", true);
     show("mpLobby", false);
     return mpError("החדר מלא או שהמשחק כבר התחיל");
+  }
+  if (msg.t === "chat") {
+    addChat(String(msg.name || "שחקן").slice(0, 14), cleanChat(msg.text));
+    return;
+  }
+  if (msg.t === "spectate") {
+    lobby = msg.lobby;
+    startSpectating(msg);
+    return;
   }
   if (msg.t === "lobby") {
     lobby = msg.lobby;
@@ -1470,6 +1511,8 @@ async function quickMatch() {
 function leaveRoom() {
   room?.leave();
   room = null;
+  stopSpectating();
+  updateChatVisibility();
   latestStates.clear();
   if (mpRoster) {
     mpRoster = null;
@@ -1519,6 +1562,7 @@ function backToRoom(fromHere) {
   }
   if (fromHere && room?.isHost) room.broadcast({ t: "toLobby" });
   if (!room) return toGarage();
+  stopSpectating();
   mpRoster = null;
   buildCars();
   toGarage();
@@ -1760,6 +1804,120 @@ $("dailyClose").addEventListener("click", () => {
   show("daily", false);
   show("menu", true);
 });
+
+/* ===================================================================
+   צ'אט במולטיפלייר: בלובי ובזמן המירוץ. Enter או T פותחים, Enter שולח, Escape סוגר.
+   =================================================================== */
+const cleanChat = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 120);
+const chatTimes = new Map();
+function chatFlood(id) {
+  const now = performance.now();
+  const last = chatTimes.get(id) || 0;
+  chatTimes.set(id, now);
+  return now - last < 700; // לא יותר מהודעה בערך בשנייה
+}
+function addChat(name, text) {
+  if (!text) return;
+  const li = document.createElement("li");
+  const b = document.createElement("b");
+  b.textContent = name; // מהרשת — רק כטקסט
+  li.append(b, document.createTextNode(text));
+  const feed = $("chatFeed");
+  feed.append(li);
+  while (feed.children.length > 6) feed.firstElementChild.remove();
+  setTimeout(() => li.classList.add("old"), 10000); // במירוץ ההודעות נעלמות; בלובי נשארות
+  updateChatVisibility();
+}
+function openChat() {
+  if (!room) return;
+  input.release();
+  show("chatForm", true);
+  $("chat").style.pointerEvents = "auto";
+  $("chatInput").focus();
+}
+function closeChat() {
+  $("chatInput").value = "";
+  $("chatInput").blur();
+  show("chatForm", !!room && !mpRoster && !$("mp").classList.contains("hidden"));
+}
+function updateChatVisibility() {
+  const inLobby = !!room && !mpRoster && !$("mp").classList.contains("hidden");
+  show("chat", !!room);
+  $("chat").classList.toggle("lobby", inLobby);
+  show("chatButton", !!room && !!mpRoster);
+  if (inLobby) show("chatForm", true);
+  else if (document.activeElement !== $("chatInput")) show("chatForm", false);
+}
+$("chatForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = cleanChat($("chatInput").value);
+  if (text && room && !chatFlood("me")) {
+    const name = mpName();
+    addChat(name, text);
+    if (room.isHost) room.broadcast({ t: "chat", name, text });
+    else room.send({ t: "chat", text });
+  }
+  $("chatInput").value = "";
+  if (mpRoster) closeChat(); // במירוץ: חוזרים לנהוג מיד אחרי השליחה
+});
+$("chatButton").addEventListener("click", (e) => {
+  e.currentTarget.blur();
+  openChat();
+});
+setInterval(updateChatVisibility, 500);
+
+/* ===================================================================
+   צפייה: מי שנכנס לחדר עם קוד באמצע מירוץ — רואה אותו, ומשתתף במירוץ הבא
+   =================================================================== */
+let spectating = false;
+let spectateIndex = 0;
+function startSpectating(msg) {
+  spectating = true;
+  mpRoster = msg.roster;
+  raceLaps = msg.laps || 1;
+  settings.track = currentTrackId = msg.track;
+  useTrack(msg.track);
+  buildRosterCars(msg.roster); // אני לא ברשימה — כל המכוניות מגיעות מהרשת
+  /* "שחקן" דמה שלא נוסע ולא מצויר, כדי שכל השאר יעבוד כרגיל */
+  player = new Car({ name: "צופה", color: settings.color, type: "grip" });
+  player.placeAt(track, 0, 0);
+  player.finished = true;
+  cooldownDriver = new Driver(player);
+  show("mp", false);
+  show("menu", false);
+  race = new Race(track, cars, player, raceLaps);
+  race.time = msg.time;
+  items.reset(cars);
+  items.net = itemNet;
+  items.enabled = true;
+  coins.reset();
+  stats = newStats();
+  rewards = { coins: 0, xp: 0, completed: [] }; // לצופה אין פרסים
+  state = "race";
+  countdown = 0;
+  show("hud", true);
+  show("pauseButton", false);
+  show("touch", false);
+  show("countdown", false);
+  show("spectate", true);
+  audio.start();
+  syncAudio();
+}
+function stopSpectating() {
+  if (!spectating) return;
+  spectating = false;
+  show("spectate", false);
+}
+function spectateTarget() {
+  const order = race.standings().filter((c) => c !== player);
+  if (!order.length) return player;
+  spectateIndex = ((spectateIndex % order.length) + order.length) % order.length;
+  const car = order[spectateIndex];
+  $("spectateName").textContent = `${spectateIndex + 1}. ${car.name}`;
+  return car;
+}
+$("spectatePrev").addEventListener("click", () => spectateIndex++);
+$("spectateNext").addEventListener("click", () => spectateIndex--);
 
 /* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */
 const startButton = $("startButton");

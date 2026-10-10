@@ -25,6 +25,7 @@
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
       <div class="hud-buttons">
         <button id="pauseButton" class="chip chip-button" aria-label="השהיה">⏸</button>
+        <button id="chatButton" class="chip chip-button hidden" aria-label="צ'אט">💬</button>
         <button id="musicButton" class="chip chip-button" aria-label="מוזיקה">🎵</button>
         <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
       </div>
@@ -63,6 +64,22 @@
   </div>
 
   <div id="countdown" class="hidden"></div>
+
+  <!-- ===== צ'אט (מולטיפלייר) ===== -->
+  <div id="chat" class="chat hidden">
+    <ul id="chatFeed" class="chat-feed"></ul>
+    <form id="chatForm" class="chat-form hidden" autocomplete="off">
+      <input id="chatInput" maxlength="120" placeholder="כתבו הודעה ולחצו Enter" enterkeyhint="send">
+    </form>
+  </div>
+
+  <!-- ===== צפייה במירוץ שכבר התחיל ===== -->
+  <div id="spectate" class="spectate hidden">
+    <b>צופה במירוץ</b> · <span id="spectateName"></span>
+    <span class="key-hint">· ← → להחלפת מכונית</span>
+    <button id="spectatePrev" type="button" class="touch-only-inline">‹</button>
+    <button id="spectateNext" type="button" class="touch-only-inline">›</button>
+  </div>
   <div id="flash" class="flash"></div>
 
   <!-- ===== מוסך: בחירת מסלול, מכונית, צבע וקושי ===== -->

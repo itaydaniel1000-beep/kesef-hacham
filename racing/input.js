@@ -18,6 +18,8 @@ export class Input {
 
     this.itemPressed = false;
     addEventListener("keydown", (e) => {
+      /* כשכותבים בצ'אט — המקשים לא נוהגים */
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       /* ק (במקלדת עברית — אותו מקש פיזי כמו E): הפעלת הפריט, פעם אחת לכל לחיצה */
       if (e.code === "KeyE") {
         if (!e.repeat) this.itemPressed = true;

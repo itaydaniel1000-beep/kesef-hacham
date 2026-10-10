@@ -333,11 +333,18 @@ function startRace() {
   audio.start();
 }
 
+/* הקול פעיל רק כשהמשחק לא בהשהיה והעמוד גלוי — מקום אחד שמחליט, ונקרא מכל מעבר מצב */
+function syncAudio() {
+  if (state === "paused" || document.hidden) audio.suspend();
+  else audio.resume();
+}
+
 function toGarage() {
   state = "menu";
   pausedFrom = null;
   gridUp();
-  audio.resume();
+  syncAudio();
+  $("speedlines").style.opacity = 0;
   show("results", false);
   show("pause", false);
   show("hud", false);
@@ -353,7 +360,8 @@ function pause() {
   pausedFrom = state;
   state = "paused";
   input.release();
-  audio.suspend();
+  syncAudio();
+  $("speedlines").style.opacity = 0;
   show("touch", false);
   show("countdown", false);
   show("pause", true);
@@ -363,11 +371,10 @@ function resume() {
   if (state !== "paused") return;
   state = pausedFrom;
   pausedFrom = null;
-  audio.resume();
+  syncAudio();
   show("pause", false);
   show("touch", isTouch && !player.finished);
   if (state === "countdown") show("countdown", true);
-  last = performance.now(); // שלא תהיה קפיצה בזמן אחרי ההשהיה
 }
 
 $("startButton").addEventListener("click", startRace);
@@ -375,31 +382,28 @@ $("againButton").addEventListener("click", startRace);
 $("garageButton").addEventListener("click", toGarage);
 $("pauseButton").addEventListener("click", pause);
 $("resumeButton").addEventListener("click", resume);
-$("restartButton").addEventListener("click", () => {
-  audio.resume();
-  startRace();
-});
+$("restartButton").addEventListener("click", startRace);
 $("quitButton").addEventListener("click", toGarage);
 addEventListener("keydown", (e) => {
   if (e.code === "Escape" || e.code === "KeyP") {
+    if (e.repeat) return; // מקש מוחזק לא מהבהב בין השהיה להמשך
     if (state === "paused") resume();
     else pause();
     return;
   }
-  /* כשכפתור בפוקוס, Enter כבר לוחץ עליו — לא מתחילים מירוץ פעם שנייה */
-  if (e.target instanceof HTMLButtonElement) return;
-  if (e.code === "Enter" && (state === "menu" || (state === "finished" && !resultsShownAt))) startRace();
-});
-
-/* כשעוברים ללשונית או אפליקציה אחרת: באמצע מירוץ — השהיה; בכל מקרה — שקט */
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    pause();
-    audio.suspend();
-  } else if (state !== "paused") {
-    audio.resume();
+  /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
+  if (e.code === "Enter" && (state === "menu" || (state === "finished" && !resultsShownAt))) {
+    e.preventDefault();
+    startRace();
   }
 });
+
+/* כשעוברים ללשונית, לחלון או לאפליקציה אחרת: באמצע מירוץ — השהיה; בכל מקרה — שקט */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) pause();
+  syncAudio();
+});
+addEventListener("blur", pause);
 
 $("muteButton").textContent = settings.muted ? "🔇" : "🔊";
 $("muteButton").addEventListener("click", () => {
@@ -707,7 +711,7 @@ function step(dt) {
 }
 
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000) * TIME_SCALE;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)) * TIME_SCALE;
   last = now;
 
   if (state === "paused") {
@@ -730,7 +734,8 @@ function frame(now) {
     audio.engine(player, true, dt);
   }
 
-  renderer.render(scene, camera);
+  /* בהשהיה התמונה האחרונה נשארת על המסך — אין טעם לצייר אותה שוב 60 פעמים בשנייה */
+  if (state !== "paused") renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 

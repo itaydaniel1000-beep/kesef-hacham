@@ -73,6 +73,9 @@ export class Car {
     this.drafting = false;
     this.events = [];        // אירועים לקול ולחלקיקים: wall, bump, land, pad, nitro
 
+    this.groundHeight = undefined;
+    this.airCooldown = 0;
+    this.hitWall = false;
     this.trackIndex = 0;
     this.lateral = 0;
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
@@ -168,6 +171,7 @@ export class Car {
     this.x = p.x + l.x * lateral;
     this.z = p.z + l.z * lateral;
     this.y = p.y;
+    this.groundHeight = p.y;
     this.heading = this.moveHeading = track.headings[index];
     this.trackIndex = index;
     this.trackCount = track.count;

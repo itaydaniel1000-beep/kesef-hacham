@@ -583,8 +583,8 @@ details.howto ul { margin: 8px 0 2px; padding: 0; list-style: none; display: gri
   .pick strong { font-size: .82rem; line-height: 1.2; }
   .pick canvas { aspect-ratio: 16 / 6; }
   .stat { font-size: .72rem; }
-  .swatches { gap: 5px; flex-wrap: nowrap; }
-  .swatch-btn { width: 26px; height: 26px; border-width: 2px; box-shadow: 1px 1px 0 var(--ink); flex: none; }
+  .swatches { gap: 4px; flex-wrap: wrap; }
+  .swatch-btn { width: 24px; height: 24px; border-width: 2px; box-shadow: 1px 1px 0 var(--ink); flex: none; }
   .segmented button { padding: 6px 14px; }
 }
 

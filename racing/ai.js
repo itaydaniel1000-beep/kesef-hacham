@@ -75,15 +75,12 @@ export class Driver {
     this.car = car;
     this.lane = lane;        // נטייה אישית קטנה מהקו, כדי שלא כולם ייסעו באותו מילימטר
     this.skill = skill;      // כמה קרוב לגבול האחיזה הוא נוסע בפניות
-    this.avoid = 0;          // הזזה זמנית לצד, לעקיפה
-    this.usingNitro = false;
-    this.stuck = 0;
-    this.reverse = 0;
+    this.reset();
   }
 
   /* מתחילים כל מירוץ נקי — בלי רוורס, עקיפה או ניטרו שנשארו מהמירוץ הקודם */
   reset() {
-    this.avoid = 0;
+    this.avoid = 0;          // הזזה זמנית לצד, לעקיפה
     this.usingNitro = false;
     this.stuck = 0;
     this.reverse = 0;

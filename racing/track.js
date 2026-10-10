@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { PALETTE, toon, outlined } from "./toon.js";
-import { asphalt, ground as groundTex } from "./textures.js";
+import { asphalt, ground as groundTex, normalFrom, photoGrass } from "./textures.js";
 import { buildScenery } from "./scenery.js";
 
 export const ROAD_HALF = 7;               // חצי רוחב הכביש
@@ -150,7 +150,17 @@ export class Track {
     const tex = groundTex(this.def.scenery).clone();
     tex.repeat.setScalar(size / 14);
     tex.needsUpdate = true;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+    const normal = normalFrom(groundTex(this.def.scenery), 2).clone();
+    normal.repeat.setScalar(size / 14);
+    normal.needsUpdate = true;
+    const material = new THREE.MeshStandardMaterial({ map: tex, normalMap: normal, roughness: 0.95 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);
+    if (this.def.scenery === "forest") {
+      photoGrass((map, nm) => {
+        for (const t of [map, nm]) t.repeat.setScalar(size / 14);
+        Object.assign(material, { map, normalMap: nm, needsUpdate: true });
+      });
+    }
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((minX + maxX) / 2, -0.15, (minZ + maxZ) / 2);
     ground.receiveShadow = true;
@@ -208,12 +218,13 @@ export class Track {
     const stripe = (a, b) => (i) => (Math.floor(i / 6) % 2 ? a : b);
     /* השוליים בין הכביש לקיר: אותה קרקע כמו מסביב */
     const kind = this.def.scenery;
-    const shoulder = new THREE.MeshStandardMaterial({ map: groundTex(kind), vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 });
+    const shoulder = new THREE.MeshStandardMaterial({ map: groundTex(kind), normalMap: normalFrom(groundTex(kind), 2), vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 });
+    if (kind === "forest") photoGrass((map, normal) => Object.assign(shoulder, { map, normalMap: normal, needsUpdate: true }));
     this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.02, () => 0xffffff, { step: 2, material: shoulder, tile: 14, across: (WALL_OFFSET * 2) / 14 });
     /* שולי חצץ כהים מעבר לאבני השפה */
     this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.08, () => 0x55585e, {});
     /* אספלט עם גרגרים ועקבות צמיגים */
-    const road = new THREE.MeshStandardMaterial({ map: asphalt(), vertexColors: true, side: THREE.DoubleSide, roughness: 0.92 });
+    const road = new THREE.MeshStandardMaterial({ map: asphalt(), normalMap: normalFrom(asphalt(), 4), vertexColors: true, side: THREE.DoubleSide, roughness: 0.88 });
     this.ribbon(-ROAD_HALF, ROAD_HALF, ROAD_TOP, () => 0xffffff, { material: road, tile: 14 });
     /* קווי שוליים לבנים רציפים */
     for (const side of [1, -1]) {
@@ -410,7 +421,7 @@ export class Track {
     const arch = new THREE.Group();
     const postGeo = new THREE.BoxGeometry(0.9, 8, 0.9);
     for (const s of [1, -1]) {
-      const post = outlined(postGeo, PALETTE.surface);
+      const post = outlined(postGeo, toon(0x8d939c, { roughness: 0.35, metalness: 0.8 }));
       post.position.set(s * (ROAD_HALF + 2.2), 4, 0);
       arch.add(post);
     }
@@ -418,19 +429,21 @@ export class Track {
     bannerCanvas.width = 512;
     bannerCanvas.height = 96;
     const b = bannerCanvas.getContext("2d");
-    b.fillStyle = "#f5c542";
+    b.fillStyle = "#111418";
     b.fillRect(0, 0, 512, 96);
-    b.fillStyle = "#1a1f2e";
+    b.fillStyle = "#e10600";
+    b.fillRect(0, 86, 512, 10);
+    b.fillStyle = "#ffffff";
     b.font = "900 62px Heebo, Arial, sans-serif";
     b.textAlign = "center";
     b.textBaseline = "middle";
     b.direction = "rtl";
-    b.fillText("🏁 קו סיום 🏁", 256, 52);
+    b.fillText("קו סיום", 256, 48);
     const bannerTex = new THREE.CanvasTexture(bannerCanvas);
     bannerTex.colorSpace = THREE.SRGBColorSpace;
     const face = new THREE.MeshBasicMaterial({ map: bannerTex });
-    const gold = toon(PALETTE.gold);
-    const banner = outlined(new THREE.BoxGeometry((ROAD_HALF + 2.6) * 2, 2.2, 0.6), PALETTE.gold);
+    const gold = toon(0x23272e, { roughness: 0.4, metalness: 0.7 });
+    const banner = outlined(new THREE.BoxGeometry((ROAD_HALF + 2.6) * 2, 2.2, 0.6), gold);
     banner.material = [gold, gold, gold, gold, face, face];
     banner.position.y = 8;
     arch.add(banner);

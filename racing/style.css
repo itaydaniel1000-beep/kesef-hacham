@@ -609,3 +609,74 @@ body.touch .key-hint { display: none; }
   .touch-brake { font-size: 1rem; }
   .touch-nitro { width: 54px; height: 54px; font-size: .85rem; }
 }
+
+.primary-button:disabled { opacity: .6; cursor: progress; }
+
+/* ===================================================================
+   מראה ריאליסטי: זכוכית כהה, קווים דקים, צללים רכים — כמו במשחקי מירוץ אמיתיים.
+   השכבה הזאת דורסת את הסגנון המצויר שלמעלה.
+   =================================================================== */
+:root {
+  --ink: #eef2f8;
+  --ink-soft: #9aa6b8;
+  --bg: #0b0f16;
+  --surface: rgba(14, 18, 26, .84);
+  --surface-warm: rgba(255, 255, 255, .05);
+  --brand: #e10600;
+  --brand-strong: #b80500;
+  --brand-soft: rgba(225, 6, 0, .2);
+  --gold: #ffc400;
+  --radius: 10px;
+  --shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  --line: rgba(255, 255, 255, .14);
+}
+
+.card, .chip, .pick, .badge, .primary-button, .secondary-button, .segmented, .segmented button,
+.touch-btn, #minimap, .speedo, .nitro, .nitro-bar, #countdown, kbd, details.howto, .results li,
+.swatch-btn, .stat-bar i, .chip-button {
+  border-width: 1px;
+  border-color: var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+.card, .chip, .speedo, .nitro, #minimap, #countdown, .touch-btn {
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.card { background: var(--surface); box-shadow: var(--shadow); }
+.chip, .speedo, .nitro, #minimap, .chip-button { background: rgba(10, 13, 19, .62); color: var(--ink); }
+.chip small { color: var(--ink-soft); letter-spacing: .04em; }
+.chip-place { background: var(--brand); }
+.chip-place small { color: rgba(255, 255, 255, .8); }
+.badge { background: rgba(255, 255, 255, .06); }
+.pick { background: rgba(255, 255, 255, .04); color: var(--ink); }
+.pick:hover { transform: none; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); border-color: rgba(255, 255, 255, .3); }
+.pick.selected { background: var(--brand-soft); border-color: var(--brand); transform: none; box-shadow: 0 0 0 1px var(--brand), 0 10px 30px rgba(0, 0, 0, .35); }
+.pick.selected small { color: var(--ink-soft); }
+.pick canvas { border-color: var(--line); border-width: 1px; }
+.stat-bar i { border-width: 1px; background: rgba(255, 255, 255, .08); }
+.stat-bar i.on { background: var(--brand); border-color: var(--brand); }
+.segmented { background: rgba(255, 255, 255, .04); }
+.segmented button { color: var(--ink); background: transparent; }
+.segmented button.selected { background: var(--brand); color: #fff; }
+.swatch-btn.selected { outline: 2px solid #fff; }
+details.howto { background: rgba(255, 255, 255, .04); }
+kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
+.primary-button { background: var(--brand); color: #fff; border-color: transparent; box-shadow: 0 10px 30px rgba(225, 6, 0, .35); }
+.primary-button:hover, .primary-button:active { transform: none; background: var(--brand-strong); box-shadow: 0 10px 30px rgba(225, 6, 0, .45); }
+.secondary-button { background: rgba(255, 255, 255, .06); color: var(--ink); }
+.secondary-button:hover { transform: none; background: rgba(255, 255, 255, .12); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.results li { background: rgba(255, 255, 255, .04); }
+#countdown { background: rgba(10, 13, 19, .7); color: #fff; }
+#countdown.go { background: var(--brand); color: #fff; }
+.nitro-bar { background: rgba(255, 255, 255, .08); }
+#nitroFill { background: linear-gradient(90deg, #00b4ff, #7ae0ff); }
+.nitro.ready #nitroFill { background: linear-gradient(90deg, #ff6a00, #ffc400); }
+.touch-btn { background: rgba(10, 13, 19, .55); color: #fff; }
+.touch-btn.active { transform: scale(.94); box-shadow: 0 4px 12px rgba(0, 0, 0, .4); }
+.touch-gas { background: rgba(30, 160, 85, .8); }
+.touch-brake { background: rgba(200, 40, 40, .8); }
+.touch-nitro { background: rgba(255, 196, 0, .85); color: #111; }
+@keyframes glow { to { box-shadow: 0 0 0 6px rgba(255, 196, 0, .45); } }
+.overlay { background: radial-gradient(ellipse at center, rgba(5, 7, 10, .35), rgba(5, 7, 10, .75)); }
+.pick canvas { background: #151a22; }
+.credits { margin: 12px 0 0; text-align: center; font-size: .72rem; color: var(--ink-soft); direction: rtl; }

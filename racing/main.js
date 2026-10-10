@@ -5,7 +5,7 @@ import { Sky } from "three/addons/objects/Sky.js";
 import { PALETTE } from "./toon.js";
 import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
-import { Car, CAR_TYPES, resolveCollisions } from "./car.js";
+import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -23,16 +23,16 @@ const hex = (c) => "#" + c.toString(16).padStart(6, "0");
 /* ---------- הגדרות שנשמרות בין ביקורים ---------- */
 
 const COLORS = [
-  { color: PALETTE.brand, name: "ירוקי" },
-  { color: PALETTE.gold, name: "זהבי" },
-  { color: PALETTE.sky, name: "תכלת" },
-  { color: PALETTE.berry, name: "אדומי" },
-  { color: PALETTE.purple, name: "סגולי" },
-  { color: 0xf08a24, name: "כתומי" },
-  { color: 0xe86aa6, name: "ורודי" },
-  { color: 0x1fb5a8, name: "טורקיז" },
-  { color: 0x8cc63f, name: "ליים" },
-  { color: 0x2f4ea8, name: "כחולי" }
+  { color: 0xb80a0a, name: "אדומי" },
+  { color: 0x0e0f12, name: "שחורי" },
+  { color: 0xe9ebee, name: "לבני" },
+  { color: 0x9ea4ab, name: "כסופי" },
+  { color: 0x0b3d91, name: "כחולי" },
+  { color: 0xf2b705, name: "צהובי" },
+  { color: 0x0f4d2e, name: "ירוקי" },
+  { color: 0xe0590f, name: "כתומי" },
+  { color: 0x3b3f46, name: "אפורי" },
+  { color: 0x5c0f24, name: "בורדו" }
 ];
 
 const RIVALS = 8;
@@ -45,7 +45,7 @@ const LEVELS = {
   hard: { name: "קשה", ai: 1.1, skill: 0.98, ahead: 0, behind: 0.08 }
 };
 
-const settings = { track: "forest", type: "grip", color: PALETTE.brand, level: "normal", muted: false, music: true };
+const settings = { track: "forest", type: "grip", color: COLORS[0].color, level: "normal", muted: false, music: true };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem("racing-settings") || "{}"));
 } catch {
@@ -56,7 +56,7 @@ settings.track = findTrack(settings.track).id;
 let currentTrackId = findTrack(params.get("track") || settings.track).id;
 if (!CAR_TYPES[settings.type]) settings.type = "grip";
 if (!LEVELS[settings.level]) settings.level = "normal";
-if (!COLORS.some((c) => c.color === settings.color)) settings.color = PALETTE.brand;
+if (!COLORS.some((c) => c.color === settings.color)) settings.color = COLORS[0].color;
 
 function saveSettings() {
   try {
@@ -106,6 +106,16 @@ function skyEnvironment(id) {
   return envMaps.get(id);
 }
 
+/* תאורה והשתקפויות מתמונת 360° אמיתית של שמיים (HDR) — זה מה שנותן למתכת ולזכוכית מראה אמיתי */
+let photoEnv = null;
+async function loadPhotoEnvironment() {
+  const { RGBELoader } = await import("three/addons/loaders/RGBELoader.js");
+  const hdr = await new RGBELoader().loadAsync("assets/quarry_01_1k.hdr");
+  hdr.mapping = THREE.EquirectangularReflectionMapping;
+  photoEnv = pmrem.fromEquirectangular(hdr).texture;
+  hdr.dispose();
+}
+
 const hemi = new THREE.HemisphereLight(0xffffff, 0x7fae6f, 0.35);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
@@ -144,7 +154,7 @@ function useTrack(id) {
   u.mieDirectionalG.value = 0.8;
   sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - th.sun[0]), THREE.MathUtils.degToRad(th.sun[1]));
   u.sunPosition.value.copy(sunDir);
-  scene.environment = skyEnvironment(track.def.id);
+  scene.environment = photoEnv || skyEnvironment(track.def.id);
   scene.fog.color.set(th.haze);
   scene.fog.near = th.fog[0];
   scene.fog.far = th.fog[1];
@@ -171,7 +181,7 @@ function buildCars() {
   }
   const level = LEVELS[settings.level];
   const mine = COLORS.find((c) => c.color === settings.color);
-  player = new Car({ name: "אני", color: mine.color, type: settings.type });
+  player = new Car({ name: "אני", color: mine.color, type: settings.type, detail: 1e6 });
   player.brakeDrifts = true;
   /* היריבים מקבלים את הצבעים שלא בחרת. כל אחד מעט שונה: סוג מכונית, מהירות, נטייה בקו ואומץ בפניות */
   const others = COLORS.filter((c) => c !== mine);
@@ -181,7 +191,8 @@ function buildCars() {
   for (let i = 0; i < RIVALS; i++) {
     const car = new Car({
       name: others[i].name, color: others[i].color, type: types[i % 3],
-      speedScale: (1 - i * 0.004) * level.ai
+      speedScale: (1 - i * 0.004) * level.ai,
+      detail: coarse ? 18 : 45 // בטלפון: רק היריבים הכי קרובים מפורטים
     });
     rivals.push(car);
     drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.005 }));
@@ -210,13 +221,13 @@ function gridUp() {
 function drawTrackPreview(canvasEl, t) {
   const ctx = canvasEl.getContext("2d");
   const w = canvasEl.width, h = canvasEl.height;
-  ctx.fillStyle = hex(t.theme.ground);
+  ctx.fillStyle = "#151a22";
   ctx.fillRect(0, 0, w, h);
   const b = boundsOf(t);
   const scale = Math.min((w - 24) / (b.maxX - b.minX), (h - 24) / (b.maxZ - b.minZ));
   const map = (p) => [w / 2 - (p.x - b.cx) * scale, h / 2 - (p.z - b.cz) * scale];
   ctx.lineJoin = "round";
-  for (const [lw, c] of [[8, "#1a1f2e"], [4, "#ffffff"]]) {
+  for (const [lw, c] of [[8, "#05070a"], [4, "#d9dde3"]]) {
     ctx.beginPath();
     t.points.forEach((p, i) => {
       const [x, y] = map(p);
@@ -238,8 +249,8 @@ function drawTrackPreview(canvasEl, t) {
   });
   ctx.stroke();
   const [sx, sy] = map(t.points[0]);
-  ctx.fillStyle = "#f5c542";
-  ctx.strokeStyle = "#1a1f2e";
+  ctx.fillStyle = "#e10600";
+  ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(sx, sy, 5, 0, Math.PI * 2);
@@ -455,7 +466,7 @@ addEventListener("keydown", (e) => {
   /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
   /* על "למוסך" או על "איך נוהגים?" Enter עושה את מה שהם עושים — לא מתחיל מירוץ */
   if (e.target instanceof Element && e.target.closest("#garageButton, summary")) return;
-  if (e.code === "Enter" && (state === "menu" || (state === "finished" && !resultsShownAt))) {
+  if (e.code === "Enter" && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
     e.preventDefault();
     startRace();
   }
@@ -604,7 +615,7 @@ function drawMinimap() {
     mctx.fillStyle = hex(car.color);
     mctx.fill();
     mctx.lineWidth = 2;
-    mctx.strokeStyle = "#1a1f2e";
+    mctx.strokeStyle = car === player ? "#ffffff" : "#05070a";
     mctx.stroke();
   }
 }
@@ -835,6 +846,18 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+/* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */
+const startButton = $("startButton");
+const startLabel = startButton.textContent;
+startButton.disabled = true;
+startButton.textContent = "טוען…";
+await Promise.all([
+  loadCarModel().catch((e) => console.warn("car model:", e)),
+  loadPhotoEnvironment().catch((e) => console.warn("environment:", e))
+]);
+startButton.disabled = false;
+startButton.textContent = startLabel;
+
 useTrack(currentTrackId);
 buildCars();
 buildGarage();
@@ -850,5 +873,7 @@ window.__race = {
   get track() { return track; },
   audio,
   renderer,
+  scene,
+  camera,
   start: startRace
 };

@@ -1,7 +1,7 @@
 /* ===== נוף לכל מסלול: עצים, קקטוסים, אנשי שלג, יציע, עננים והרים ברקע ===== */
 
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { toon, outlined, shared } from "./toon.js";
 import { WALL_OFFSET } from "./track.js";
 
@@ -34,7 +34,7 @@ function pine() {
 /* עץ נשיר: כמה גושי עלווה בגדלים שונים */
 function leafy() {
   const parts = [[0, 4.2, 0, 2.1], [1.1, 4.8, 0.4, 1.5], [-1, 4.6, -0.5, 1.6], [0.2, 5.6, -0.2, 1.4]].map(([x, y, z, r]) =>
-    jitter(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z), 0.3));
+    jitter(mergeVertices(new THREE.IcosahedronGeometry(r, 2).deleteAttribute("uv").deleteAttribute("normal")).translate(x, y, z), 0.35).toNonIndexed());
   return mergeGeometries(parts);
 }
 
@@ -61,7 +61,7 @@ const mountainGeos = new Map();
 function mountainGeo(kind, haze) {
   const key = kind + haze;
   if (!mountainGeos.has(key)) {
-    const g = jitter(new THREE.ConeGeometry(1, 1, 28, 10).toNonIndexed(), 0.09, { keepBottom: true });
+    const g = jitter(new THREE.ConeGeometry(1, 1, 40, 14), 0.08, { keepBottom: true });
     const pos = g.attributes.position;
     const rock = new THREE.Color(kind === "snow" ? 0x6f7f92 : 0x5f7360);
     const snow = new THREE.Color(0xf4f7fb);

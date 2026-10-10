@@ -30,7 +30,7 @@ export const CAR_TYPES = {
 
 const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.4, 20));
 const strutGeo = shared(new THREE.BoxGeometry(0.1, 0.45, 0.22));
-const flameGeo = shared(new THREE.ConeGeometry(0.24, 1.4, 10));
+const flameGeo = shared(new THREE.ConeGeometry(0.11, 0.9, 12, 1, true));
 const headGeo = shared(new THREE.BoxGeometry(0.5, 0.13, 0.2));
 const tailGeo = shared(new THREE.BoxGeometry(0.55, 0.12, 0.05));
 const mirrorGeo = shared(new THREE.BoxGeometry(0.22, 0.13, 0.12));
@@ -39,16 +39,54 @@ const glassMat = shared(new THREE.MeshPhysicalMaterial({ color: 0x0d1117, roughn
 const trimMat = shared(new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.6 }));
 const carbonMat = shared(new THREE.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.35, metalness: 0.5 }));
 const headMat = shared(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 1.2 }));
-const flameMat = shared(new THREE.MeshBasicMaterial({ color: 0xffa64a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+const flameMat = shared(new THREE.MeshBasicMaterial({ color: 0x4f8dff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
 /* צמיג: צד מגומי מט, ושני הצדדים השטוחים — חישוק מתכת עם חישורים */
 const rimMat = shared(new THREE.MeshStandardMaterial({ map: rimFace(), roughness: 0.3, metalness: 0.8 }));
 const tireMats = [shared(new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.95 })), rimMat, rimMat];
+
+/* ===== דגם תלת-ממד אמיתי (glTF) ===== */
+let realCar = null;
+const darkTrimMat = shared(new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.4, metalness: 0.6 }));
+const realGlassMat = shared(new THREE.MeshPhysicalMaterial({ color: 0x0a0d11, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.55, clearcoat: 1 }));
+
+/* טוענים פעם אחת; כל מכונית מקבלת עותק שחולק את הגאומטריה. אם הטעינה נכשלת — נשארים עם הדגם הפשוט */
+export async function loadCarModel() {
+  const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
+    import("three/addons/loaders/GLTFLoader.js"),
+    import("three/addons/loaders/DRACOLoader.js")
+  ]);
+  const draco = new DRACOLoader().setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/");
+  const loader = new GLTFLoader().setDRACOLoader(draco);
+  const [gltf, ao] = await Promise.all([
+    loader.loadAsync("assets/ferrari.glb"),
+    new THREE.TextureLoader().loadAsync("assets/ferrari_ao.png")
+  ]);
+  draco.dispose();
+  const model = gltf.scene;
+  /* דיסקי הבלמים מוסתרים מאחורי החישוקים — חוסכים את הפוליגונים שלהם. תא הנוסעים נשאר: המכונית פתוחה */
+  for (const name of ["brake", "brake_1", "brake_2", "brake_3"]) {
+    const o = model.getObjectByName(name);
+    o?.parent.remove(o);
+  }
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry.userData.shared = true;
+    /* בלי צבעי מותג: הצהוב והכחול הופכים לגימור כהה */
+    if (o.material.name === "Ferrari_Yellow" || o.material.name === "_0098_DodgerBlue") o.material = darkTrimMat;
+    else if (o.name === "glass") o.material = realGlassMat;
+    else shared(o.material);
+    o.castShadow = o.name === "body";
+  });
+  ao.colorSpace = THREE.SRGBColorSpace;
+  shared(ao);
+  realCar = { model, ao };
+}
 
 /* צבע מכונית: לכה עם שכבת ברק (clearcoat) — משקפת את השמיים */
 const paints = new Map();
 function paintMaterial(color) {
   if (!paints.has(color)) {
-    paints.set(color, shared(new THREE.MeshPhysicalMaterial({ color, roughness: 0.45, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.1, envMapIntensity: 0.45 })));
+    paints.set(color, shared(new THREE.MeshPhysicalMaterial({ color, roughness: 0.42, metalness: 0.6, clearcoat: 1, clearcoatRoughness: 0.03 })));
   }
   return paints.get(color);
 }
@@ -66,7 +104,8 @@ function profile(points, width, bevel) {
 }
 
 export class Car {
-  constructor({ name, color, type = "grip", speedScale = 1 }) {
+  constructor({ name, color, type = "grip", speedScale = 1, detail = 45 }) {
+    this.detail = detail; // עד איזה מרחק מהמצלמה מציירים את הדגם המפורט
     const spec = CAR_TYPES[type];
     this.name = name;
     this.color = color;
@@ -147,7 +186,7 @@ export class Car {
     add(new THREE.BoxGeometry(cabinW - 0.02, 0.07, roofLen + 0.1), paint, 0, roofY + 0.02, (zf - 0.8 + zr + 0.45) / 2);
 
     /* פנסים: לבנים מקדימה, אדומים מאחור — האחוריים מתחזקים כשבולמים */
-    this.tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0a0a, emissive: 0xff2a1a, emissiveIntensity: 0.6 });
+    this.tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0a0a, emissive: 0xff2a1a, emissiveIntensity: 0.6, roughness: 0.2 });
     for (const side of [1, -1]) {
       add(headGeo, headMat, side * s.width * 0.32, y0 + 0.36, a - 0.08, false).rotation.x = -0.5;
       add(tailGeo, this.tailMat, side * s.width * 0.3, top - 0.2, -a - 0.03, false);
@@ -171,7 +210,7 @@ export class Car {
     for (const side of [0.45, -0.45]) {
       const flame = new THREE.Mesh(flameGeo, flameMat);
       flame.rotation.x = -Math.PI / 2;
-      flame.position.set(side, y0 + 0.2, -a - 0.7);
+      flame.position.set(side * 0.8, y0 + 0.18, -a - 0.45);
       this.flames.add(flame);
     }
     this.flames.visible = false;
@@ -205,8 +244,50 @@ export class Car {
     this.blob.position.y = 0.1;
     car.add(this.blob);
 
+    if (realCar) this.useRealModel(car, body, s, paint);
     car.rotation.order = "YXZ";
     return car;
+  }
+
+  /* הדגם האמיתי מקרוב, והדגם הפשוט מרחוק (LOD) — תשע מכוניות מפורטות כבדות מדי לטלפון */
+  useRealModel(car, body, s, paint) {
+    const simple = new THREE.Group();
+    for (const o of [...body.children]) if (o !== this.flames) simple.add(o);
+    for (const p of [...this.wheels.map((w) => w.parent)]) simple.add(p);
+
+    const real = realCar.model.clone(true);
+    const k = Math.max(0.9, s.len / 4.54);
+    real.scale.setScalar(k);
+    real.rotation.y = Math.PI; // הדגם בנוי עם החרטום לכיוון -z
+    real.getObjectByName("body").material = paint;
+    for (const name of ["lights_red", "brakes"]) {
+      const o = real.getObjectByName(name);
+      if (o) o.material = this.tailMat;
+    }
+    this.realWheels = [];
+    this.realFront = [];
+    for (const name of ["wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr"]) {
+      const w = real.getObjectByName(name);
+      w.rotation.order = "YXZ"; // קודם סיבוב הגלגל, אחר כך ההיגוי
+      this.realWheels.push(w);
+      if (name.startsWith("wheel_f")) this.realFront.push(w);
+    }
+    this.realRadius = 0.36 * k;
+
+    const lod = new THREE.LOD();
+    lod.addLevel(real, 0);
+    lod.addLevel(simple, this.detail);
+    body.add(lod);
+
+    /* צל מגע אמיתי (אפייה של חסימת אור) במקום העיגול */
+    this.blob.geometry.dispose();
+    this.blob.geometry = new THREE.PlaneGeometry(0.655 * 4 * k, 1.3 * 4 * k);
+    this.blob.material.dispose();
+    this.blob.material = new THREE.MeshBasicMaterial({
+      map: realCar.ao, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, premultipliedAlpha: true, depthWrite: false
+    });
+    this.blob.scale.set(1, 1, 1);
+    this.blob.renderOrder = 2;
   }
 
   /* שחרור הגאומטריות והחומרים של המכונית הזאת (כשבונים מכוניות חדשות במוסך) */
@@ -417,11 +498,18 @@ export class Car {
     const lean = -this.steer * Math.min(1, Math.abs(this.speed) / this.maxSpeed) * (this.drifting ? 0.12 : 0.06);
     this.body.rotation.z += (lean - this.body.rotation.z) * Math.min(1, 8 * dt);
     for (const w of this.wheels) w.rotation.x += (this.speed * dt) / 0.46;
-    for (const p of this.frontPivots) p.rotation.y = this.steer * 0.45 - (this.drifting ? this.slip * 0.6 : 0);
+    const wheelAngle = this.steer * 0.45 - (this.drifting ? this.slip * 0.6 : 0);
+    for (const p of this.frontPivots) p.rotation.y = wheelAngle;
+    if (this.realWheels) {
+      /* הדגם מסובב בחצי סיבוב, ולכן ציר הגלגלים שלו הפוך */
+      for (const w of this.realWheels) w.rotation.x -= (this.speed * dt) / this.realRadius;
+      for (const w of this.realFront) w.rotation.y = wheelAngle;
+    }
     /* הצל נשאר על הכביש גם בקפיצה */
     const lift = this.y - (this.groundHeight ?? this.y);
     this.blob.position.y = 0.1 - lift;
-    this.blob.material.opacity = Math.max(0.08, 0.25 - lift * 0.03);
+    if (!this.realWheels) this.blob.material.opacity = Math.max(0.08, 0.25 - lift * 0.03);
+    else this.blob.visible = lift < 3;
 
     const flaming = this.nitroOn || this.padBoost > 0.4;
     this.flames.visible = flaming;

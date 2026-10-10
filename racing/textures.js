@@ -132,3 +132,48 @@ export const rimFace = () =>
       { repeat: false }
     )
   );
+
+/* מפת נורמלים מהבהירות של טקסטורה: גרגרים בהירים בולטים — האור "תופס" את החספוס */
+export function normalFrom(tex, strength = 2) {
+  return linear(cached(`normal-${tex.uuid}-${strength}`, () => {
+    const src = tex.image;
+    const size = src.width;
+    const data = src.getContext("2d").getImageData(0, 0, size, size).data;
+    const h = (x, y) => {
+      const i = (((y + size) % size) * size + ((x + size) % size)) * 4;
+      return (data[i] + data[i + 1] + data[i + 2]) / 765;
+    };
+    return canvasTexture(size, (ctx) => {
+      const img = ctx.createImageData(size, size);
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const dx = (h(x - 1, y) - h(x + 1, y)) * strength;
+          const dy = (h(x, y - 1) - h(x, y + 1)) * strength;
+          const len = Math.hypot(dx, dy, 1);
+          const i = (y * size + x) * 4;
+          img.data[i] = (dx / len * 0.5 + 0.5) * 255;
+          img.data[i + 1] = (dy / len * 0.5 + 0.5) * 255;
+          img.data[i + 2] = (1 / len * 0.5 + 0.5) * 255;
+          img.data[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    });
+  }));
+}
+const linear = (t) => ((t.colorSpace = THREE.NoColorSpace), t);
+
+/* דשא מצולם (opengameart, CC-BY 3.0) — נטען ברקע ומחליף את הדשא המחושב כשהוא מוכן */
+export function photoGrass(onReady) {
+  const loader = new THREE.TextureLoader();
+  Promise.all([loader.loadAsync("assets/grasslight-big.jpg"), loader.loadAsync("assets/grasslight-big-nm.jpg")])
+    .then(([map, normal]) => {
+      map.colorSpace = THREE.SRGBColorSpace;
+      for (const t of [map, normal]) {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = 8;
+      }
+      onReady(map, normal);
+    })
+    .catch(() => {});
+}

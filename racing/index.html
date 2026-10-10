@@ -23,12 +23,17 @@
       <div class="chip chip-place"><small>מקום</small><strong id="hudPlace">9/9</strong></div>
       <div class="chip"><small>מסלול</small><strong id="hudLap">0%</strong></div>
       <div class="chip"><small>זמן</small><strong id="hudTime">0:00.00</strong></div>
-      <div class="chip chip-item" id="hudItemChip"><small>פריט <span class="key-hint">(ק)</span></small><strong id="hudItem">—</strong></div>
       <div class="hud-buttons">
         <button id="pauseButton" class="chip chip-button" aria-label="השהיה">⏸</button>
         <button id="musicButton" class="chip chip-button" aria-label="מוזיקה">🎵</button>
         <button id="muteButton" class="chip chip-button" aria-label="השתקה">🔊</button>
       </div>
+    </div>
+    <!-- הפריט מקופסת ההפתעה: באמצע למעלה, רק כשיש לך אחד -->
+    <div id="itemSlot" class="item-slot hidden" aria-live="polite">
+      <span id="itemIcon" class="item-icon"></span>
+      <b id="itemCount" class="item-count"></b>
+      <kbd class="item-key key-hint">ק</kbd>
     </div>
     <canvas id="minimap" width="150" height="150"></canvas>
     <div class="dash">

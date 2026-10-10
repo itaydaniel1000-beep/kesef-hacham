@@ -16,6 +16,8 @@ const WARP_AHEAD = 5;      // השיגור: לאן היית מגיע בעוד 5 
 const RESPAWN = 4;         // קופסה שנלקחה חוזרת אחרי 4 שניות
 const BOX_HIT = 2.4, MINE_HIT = 1.9;
 const HISTORY_STEP = 0.1;
+const MINE_BEHIND = 4;     // כמה מטרים מאחורי המכונית המוקש נשאר
+const OWNER_CLEAR = 8;     // המוקש שלך נדרך רק אחרי שהתרחקת ממנו כך
 
 /* טקסטורת "?" לקופסה */
 function boxTexture() {
@@ -111,7 +113,6 @@ export class ItemSystem {
     }
     /* מוקשים מהבהבים */
     for (const m of this.mines) {
-      m.arm -= dt;
       m.light.material.color.setHex(Math.sin(this.time * 10) > 0 ? 0xff2a1a : 0x330000);
     }
     if (!racing) return;
@@ -140,8 +141,12 @@ export class ItemSystem {
       /* מוקשים */
       for (const m of this.mines) {
         if (m.hit) continue;
-        if (m.owner === car && m.arm > 0) continue; // המוקש שלך לא תופס אותך ברגע שהנחת אותו
         const dx = car.x - m.mesh.position.x, dz = car.z - m.mesh.position.z;
+        /* המוקש שלך לא תופס אותך עד שהתרחקת ממנו — גם אם נסעת לאט, נתקעת בקיר או נסעת אחורה */
+        if (m.owner === car && !m.ownerClear) {
+          if (dx * dx + dz * dz > OWNER_CLEAR * OWNER_CLEAR) m.ownerClear = true;
+          continue;
+        }
         if (dx * dx + dz * dz > MINE_HIT * MINE_HIT || Math.abs(car.y - m.mesh.position.y) > 2) continue;
         m.hit = true;
         this.fx("boom", car, m.mesh.position);
@@ -187,18 +192,19 @@ export class ItemSystem {
       car.padBoost = BOOST_TIME;
       this.fx("boost", car);
     } else if (kind === "mine") {
-      /* המוקש נשאר קצת מאחורי המכונית, על הכביש */
-      const i = this.track.wrap(car.trackIndex - Math.round(4 / this.track.spacing));
-      const p = this.track.points[i], l = this.track.lefts[i];
-      const lat = Math.max(-ROAD_HALF + 1, Math.min(ROAD_HALF - 1, car.lateral));
+      /* המוקש נשאר קצת מאחורי המכונית — לפי הכיוון שבו היא באמת נוסעת (גם מחוץ לכביש או ברוורס) */
+      const dir = car.speed < -0.5 ? -1 : 1;
+      const bx = car.x - Math.sin(car.moveHeading) * MINE_BEHIND * dir;
+      const bz = car.z - Math.cos(car.moveHeading) * MINE_BEHIND * dir;
+      const groundY = car.groundHeight ?? car.y; // הקרקע מתחת למכונית (גם כשהיא באוויר)
       const mesh = new THREE.Mesh(mineGeo, mineMat);
-      mesh.position.set(p.x + l.x * lat, p.y + 0.55, p.z + l.z * lat);
+      mesh.position.set(bx, groundY + 0.55, bz);
       mesh.castShadow = true;
       const light = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
       light.position.y = 0.5;
       mesh.add(light);
       this.group.add(mesh);
-      this.mines.push({ mesh, light, owner: car, arm: 1.2, hit: false });
+      this.mines.push({ mesh, light, owner: car, ownerClear: false, hit: false });
       if (this.mines.length > 24) this.group.remove(this.mines.shift().mesh);
       this.fx("mine", car);
     } else if (kind === "warp") {

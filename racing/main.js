@@ -537,7 +537,7 @@ const hud = {
   place: $("hudPlace"), lap: $("hudLap"), time: $("hudTime"), speed: $("hudSpeed"),
   nitroFill: $("nitroFill"), nitro: document.querySelector(".nitro"),
   touchNitro: document.querySelector(".touch-nitro"), speedlines: $("speedlines"),
-  item: $("hudItem"), itemChip: $("hudItemChip"),
+  itemSlot: $("itemSlot"), itemIcon: $("itemIcon"), itemCount: $("itemCount"),
   last: {}
 };
 function hudSet(key, value, write) {
@@ -556,10 +556,13 @@ function updateHud() {
   hudSet("ready", ready, (v) => hud.nitro.classList.toggle("ready", v));
   hudSet("touchReady", ready && !player.nitroOn, (v) => hud.touchNitro.classList.toggle("ready", v));
   hudSet("lines", player.nitroOn || player.padBoost > 0.3 ? 0.9 : 0, (v) => (hud.speedlines.style.opacity = v));
-  const item = player.item ? ITEMS[player.item].icon + (player.item === "boost" ? `×${player.itemCharges}` : "") : "—";
-  hudSet("item", item, (v) => {
-    hud.item.textContent = v;
-    hud.itemChip.classList.toggle("has", v !== "—");
+  /* הפריט מוצג באמצע למעלה — רק כשיש לך אחד */
+  const item = player.item && !player.finished ? player.item + (player.item === "boost" ? player.itemCharges : "") : "";
+  hudSet("item", item, () => {
+    hud.itemSlot.classList.toggle("hidden", !item);
+    if (!item) return;
+    hud.itemIcon.textContent = ITEMS[player.item].icon;
+    hud.itemCount.textContent = player.item === "boost" ? `×${player.itemCharges}` : "";
   });
   drawMinimap();
 }

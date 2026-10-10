@@ -2,10 +2,9 @@
 
   python3 racing/tools/make-engine.py
 
-כל הצתה היא פולס קצר שעובר דרך התהודות של האגזוז. הפולסים לא זהים —
-כל צילינדר קצת שונה וכל פיצוץ קצת אחר — וזה מה שהופך את זה מצפצוף למנוע.
-כל לולאה נחתכת על מספר שלם של מחזורי מנוע, והזנבות של הפולסים נעטפים
-לתחילת הלולאה, כך שאין קליק כשהיא חוזרת. בדפדפן משנים את מהירות הניגון
+הצליל בנוי מההרמוניות של תדר ההצתה, עם צבע חם ותהודת אגזוז עדינה,
+ועוד הרמוניות חלשות של מחזור המנוע המלא (הצילינדרים לא זהים) — זה הגרגור.
+כל לולאה נחתכת על מספר שלם של מחזורי מנוע, כך שאין קליק כשהיא חוזרת. בדפדפן משנים את מהירות הניגון
 לפי הסל"ד ועוברים בהדרגה בין שלוש ההקלטות.
 
 הקובץ הוא WAV ולא MP3: MP3 מוסיף שקט קצר בקצוות, שהיה נשמע כקליק בכל סיבוב של הלולאה.
@@ -38,37 +37,32 @@ def render(rpm):
     cycle = 4 / fire                    # מחזור מנוע מלא: כל ארבעת הצילינדרים
     cycles = max(1, round(LOOP_SECONDS / cycle))
     n = int(round(cycles * cycle * SR))
-    out = np.zeros(n)
+    t = np.arange(n) / SR
     hi = (rpm - RPMS[0]) / (RPMS[-1] - RPMS[0])  # 0 בסל"ד נמוך, 1 בגבוה
 
-    # צורת הפולס: תהודות האגזוז. בסל"ד גבוה הן קצרות ומחוספסות יותר
-    plen = int(SR * 0.05)
-    t = np.arange(plen) / SR
-    body = (np.sin(2 * np.pi * 105 * t) * np.exp(-t / 0.018)
-            + 0.7 * np.sin(2 * np.pi * 330 * t + 0.6) * np.exp(-t / (0.009 - 0.003 * hi))
-            + 0.35 * np.sin(2 * np.pi * 760 * t + 1.1) * np.exp(-t / 0.004))
-    # הפיצוץ עצמו: רעש קצר, מוחלק כדי שיישמע כמו חספוס ולא כמו רחש
-    crack = np.convolve(rng.standard_normal(plen), np.ones(4) / 2, "same")
-    crack *= np.exp(-t / (0.0025 + 0.002 * hi)) * (0.45 + 0.5 * hi)
+    # צבע הצליל: חם ועגול. הרבה גוף בבסים, תהודת אגזוז עדינה, והגבוהים יורדים מהר
+    def colour(f):
+        warm = 1 / (1 + (f / (420 + 260 * hi)) ** 2.2)
+        exhaust = 1 + 0.9 * np.exp(-((np.log(f) - np.log(125)) ** 2) / 0.08) \
+                    + 0.5 * np.exp(-((np.log(f) - np.log(360)) ** 2) / 0.06)
+        return warm * exhaust
 
-    # כל צילינדר מעט שונה בעוצמה ובצבע — זה הגרגור של המנוע
-    cylinders = [1.0, 0.82, 0.93, 0.77]
-    times = np.arange(cycles * 4) / fire
-    for k, start in enumerate(times):
-        jitter = 1 + 0.07 * rng.standard_normal()
-        drift = int((rng.standard_normal() * 0.0004) * SR)  # הזזה זעירה בזמן
-        pulse = (body * cylinders[k % 4] + crack * (0.8 + 0.4 * rng.random())) * jitter
-        idx = (int(round(start * SR)) + drift + np.arange(plen)) % n  # הזנב נעטף לתחילת הלולאה
-        np.add.at(out, idx, pulse)
+    out = np.zeros(n)
+    base = fire / 4  # תדר מחזור המנוע — הצילינדרים לא זהים, אז יש גם הרמוניות שלו
+    k = 1
+    while k * base < 3200:
+        f = k * base
+        main = k % 4 == 0          # הרמוניות של תדר ההצתה עצמו — הצליל העיקרי
+        amp = colour(f) * (1.0 if main else (0.12 if k % 2 == 0 else 0.06))
+        out += amp * np.sin(2 * np.pi * f * t + rng.random() * 2 * np.pi)
+        k += 1
 
-    # סיבוב גל הארכובה: צליל נמוך בחצי מתדר ההצתה
-    tt = np.arange(n) / SR
-    out += 0.25 * np.sin(2 * np.pi * fire / 2 * tt)
-    # יניקה: רעש אוויר שפועם עם ההצתות
-    pulse_env = 0.6 + 0.4 * np.cos(2 * np.pi * fire * tt) ** 2
-    out += band_noise(n, 400 + 500 * hi, 1600 + 1600 * hi) * pulse_env * (0.15 + 0.25 * hi)
-    # רוויה עדינה — מה שנותן לאגזוז את ה"נביחה"
-    out = np.tanh(out * 1.4)
+    # פעימה עדינה בכל הצתה — זה מה שנשמע כמו "גרגור" ולא כמו צפצוף
+    out *= 1 + 0.18 * np.cos(2 * np.pi * fire * t)
+    # נשימה: קצת אוויר רך, רק בשביל טבעיות
+    out += band_noise(n, 300, 1100 + 700 * hi) * 0.025 * np.abs(out).max()
+    # רוויה קלה מאוד — מעגלת את הקצוות בלי לצרום
+    out = np.tanh(out / (np.abs(out).max() + 1e-9) * 1.1)
     out -= out.mean()
     return out / (np.abs(out).max() + 1e-9) * 0.9
 

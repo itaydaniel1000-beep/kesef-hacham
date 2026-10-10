@@ -9,7 +9,7 @@ const GEARS = [0, 0.2, 0.38, 0.56, 0.74, 0.9];
 const ENGINE_RPMS = [1600, 3600, 6400];
 const ENGINE_SR = 22050;
 const IDLE_RPM = 950;
-const REDLINE = 7000;
+const REDLINE = 6200;
 
 const MUSIC_VOLUME = 0.35;
 /* אורך הלולאה במוזיקה: 32 תיבות ב-128 BPM */
@@ -66,22 +66,15 @@ export class GameAudio {
       screech.loop = true;
       const band = ctx.createBiquadFilter();
       band.type = "bandpass";
-      band.frequency.value = 1700;
-      band.Q.value = 6;
+      band.frequency.value = 1300;
+      band.Q.value = 3;
       this.screechGain = ctx.createGain();
       this.screechGain.gain.value = 0;
-      /* צליל גבוה שני: צמיג שמחליק חזק "צורח", לא רק שורק */
-      const band2 = ctx.createBiquadFilter();
-      band2.type = "bandpass";
-      band2.frequency.value = 2700;
-      band2.Q.value = 9;
-      screech.connect(band).connect(this.screechGain);
-      screech.connect(band2).connect(this.screechGain);
-      this.screechGain.connect(this.master);
+      screech.connect(band).connect(this.screechGain).connect(this.master);
       screech.start();
 
       /* רחש כביש, רוח, וחצץ כשיוצאים מהכביש — כל אחד רעש בלולאה עם מסנן משלו */
-      this.road = this.noiseLayer("lowpass", 160, 0.7);
+      this.road = this.noiseLayer("lowpass", 120, 0.5);
       this.wind = this.noiseLayer("bandpass", 700, 0.6);
       this.gravel = this.noiseLayer("bandpass", 420, 1.4);
 
@@ -173,20 +166,20 @@ export class GameAudio {
     this.gear = gear;
     const lo = GEARS[gear - 1], hi = GEARS[gear];
     const within = Math.min(1.15, (ratio - lo) / (hi - lo));
-    let target = 2400 + within * 4200;
+    let target = 2200 + within * 3500;
     if (ratio < 0.05) target = onGas ? 3200 : IDLE_RPM;       // עומדים במקום: סרק, או מרעישים בגז
-    if (!car.grounded && onGas) target = REDLINE;             // באוויר הגלגלים חופשיים — המנוע צורח
+    if (!car.grounded && onGas) target = Math.min(REDLINE, this.rpm + 900); // באוויר הגלגלים חופשיים — הסל"ד קופץ קצת
     if (!active) target = IDLE_RPM;
     target = Math.min(REDLINE, target * (boosted ? 1.06 : 1));
     /* הסל"ד רודף אחרי היעד: מהר למעלה, קצת יותר לאט למטה */
-    const rate = target > this.rpm ? 9 : 6;
+    const rate = target > this.rpm ? 6 : 4;
     this.rpm += (target - this.rpm) * Math.min(1, rate * dt);
 
     /* עומס: בגז המנוע חזק ובהיר; בשחרור הוא שקט, עמום, ולפעמים יורה מהאגזוז */
     this.throttle += ((onGas ? 1 : 0) - this.throttle) * Math.min(1, 12 * dt);
     if (onGas) this.throttleHeld += dt;
     else {
-      if (this.throttleHeld > 0.8 && this.rpm > 4200) this.liftOff();
+      if (this.throttleHeld > 1.2 && this.rpm > 4300 && Math.random() < 0.6) this.liftOff();
       this.throttleHeld = 0;
     }
 
@@ -202,9 +195,9 @@ export class GameAudio {
       L.gain.gain.setTargetAtTime(Math.sin((w * Math.PI) / 2), t, 0.03); // שמירה על עוצמה קבועה במעבר
       L.src.playbackRate.setTargetAtTime(r / L.rpm, t, 0.02);
     }
-    const bright = 700 + (this.rpm / REDLINE) * 2600 * (0.45 + 0.55 * this.throttle) + (car.nitroOn ? 900 : 0);
+    const bright = 600 + (this.rpm / REDLINE) * 1500 * (0.55 + 0.45 * this.throttle) + (car.nitroOn ? 500 : 0);
     this.engineFilter.frequency.setTargetAtTime(bright, t, 0.05);
-    const vol = active ? (0.1 + 0.12 * this.throttle) * (0.75 + 0.35 * (this.rpm / REDLINE)) : 0.06;
+    const vol = active ? (0.13 + 0.07 * this.throttle) * (0.8 + 0.25 * (this.rpm / REDLINE)) : 0.06;
     this.engineGain.gain.setTargetAtTime(vol, t, 0.05);
 
     /* צמיגים, כביש, רוח וחצץ */
@@ -212,29 +205,23 @@ export class GameAudio {
     const offRoad = Math.abs(car.lateral) > ROAD_HALF + 1;
     const ground = active && car.grounded ? 1 : 0;
     const skid = ground * Math.min(1, Math.abs(car.slip) * 2.5) * Math.min(1, Math.abs(car.speed) / 20);
-    this.screechGain.gain.setTargetAtTime(skid * 0.1, t, 0.05);
-    this.road.gain.gain.setTargetAtTime(ground * (offRoad ? 0.05 : 0.12) * sp, t, 0.1);
-    this.wind.gain.gain.setTargetAtTime(active ? 0.06 * sp * sp + (car.nitroOn ? 0.03 : 0) : 0, t, 0.15);
+    this.screechGain.gain.setTargetAtTime(skid * 0.045, t, 0.08);
+    this.road.gain.gain.setTargetAtTime(ground * (offRoad ? 0.02 : 0.05) * sp, t, 0.15);
+    this.wind.gain.gain.setTargetAtTime(active ? 0.025 * sp * sp + (car.nitroOn ? 0.015 : 0) : 0, t, 0.2);
     this.wind.filter.frequency.setTargetAtTime(500 + 900 * sp, t, 0.2);
-    this.gravel.gain.gain.setTargetAtTime(ground * (offRoad ? 0.16 * Math.min(1, sp * 2) : 0), t, 0.05);
+    this.gravel.gain.gain.setTargetAtTime(ground * (offRoad ? 0.07 * Math.min(1, sp * 2) : 0), t, 0.08);
   }
 
-  /* העברת הילוך: "צ'ק" קצר */
+  /* העברת הילוך: נקישה רכה */
   shift() {
-    this.burst(0.04, { type: "bandpass", freq: 2200, gain: 0.08 });
+    this.burst(0.05, { type: "bandpass", freq: 900, gain: 0.04 });
   }
 
-  /* שחרור גז בסל"ד גבוה: פססס של טורבו, ופיצוץ אחד או שניים מהאגזוז */
+  /* שחרור גז בסל"ד גבוה: פססס רך של טורבו ו"פופ" עמום מהאגזוז */
   liftOff() {
     if (!this.ctx) return;
-    this.burst(0.35, { type: "highpass", from: 3000, to: 6000, gain: 0.07 });
-    const pops = 1 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < pops; i++) {
-      setTimeout(() => {
-        this.burst(0.07, { freq: 900, gain: 0.22 });
-        this.burst(0.03, { type: "bandpass", freq: 2500, gain: 0.12 });
-      }, 60 + i * (90 + Math.random() * 120));
-    }
+    this.burst(0.3, { type: "bandpass", from: 2400, to: 1200, gain: 0.025 });
+    setTimeout(() => this.burst(0.09, { freq: 420, gain: 0.12 }), 80 + Math.random() * 120);
   }
 
   burst(duration, { freq = 800, type = "lowpass", from, to, gain = 0.3 } = {}) {

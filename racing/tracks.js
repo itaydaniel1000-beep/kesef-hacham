@@ -200,8 +200,9 @@ export const TRACKS = [
     bridge: null,
     theme: {
       ground: PALETTE.grass, embank: 0x7dbd68, sky: 0xbfe0f7, fog: [140, 330],
-      curbA: PALETTE.berry, curbB: PALETTE.surface, wallA: PALETTE.sky, wallB: PALETTE.surface,
-      dust: 0x9a7b54, hemiGround: 0x7fae6f, clouds: 14
+      curbA: 0xc8302a, curbB: 0xf2f2f2, wallA: 0xb9bec6, wallB: 0xd8dade,
+      dust: 0x9a7b54, hemiGround: 0x5f7f4a, clouds: 14,
+      sun: [38, 140], turbidity: 4, rayleigh: 1.4, haze: 0xb9cfe0
     },
     scenery: "forest"
   },
@@ -216,8 +217,9 @@ export const TRACKS = [
     bridge: null,
     theme: {
       ground: 0xf0cf8a, embank: 0xe0b56a, sky: 0xf8dcae, fog: [130, 320],
-      curbA: PALETTE.berry, curbB: PALETTE.gold, wallA: 0xd88a3f, wallB: PALETTE.surface,
-      dust: 0xd9a95c, hemiGround: 0xd9b070, clouds: 5
+      curbA: 0xc8302a, curbB: 0xf2f2f2, wallA: 0xc9b79c, wallB: 0xdfd3bf,
+      dust: 0xd9a95c, hemiGround: 0xb08a58, clouds: 5,
+      sun: [24, 220], turbidity: 9, rayleigh: 2.2, haze: 0xe6cfae
     },
     scenery: "desert"
   },
@@ -233,8 +235,9 @@ export const TRACKS = [
     bridge: { minY: 4.5 },
     theme: {
       ground: 0xeef3f8, embank: 0xdfe8f1, sky: 0xd3e5f5, fog: [120, 300],
-      curbA: PALETTE.sky, curbB: PALETTE.surface, wallA: PALETTE.purple, wallB: PALETTE.surface,
-      dust: 0xffffff, hemiGround: 0xc9d6e4, clouds: 10
+      curbA: 0x2f62b8, curbB: 0xf2f2f2, wallA: 0xaab4c0, wallB: 0xd3d9e0,
+      dust: 0xffffff, hemiGround: 0xa9b8c8, clouds: 10,
+      sun: [18, 160], turbidity: 2.5, rayleigh: 0.9, haze: 0xd0dceb
     },
     scenery: "snow"
   }

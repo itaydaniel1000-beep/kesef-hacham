@@ -599,3 +599,13 @@ body.touch .key-hint { display: none; }
   .hud-buttons { gap: 6px; margin-inline-start: 0; flex-basis: 100%; }
   .chip-button { padding: 2px 9px; font-size: 1.05rem; }
 }
+
+/* מסכים צרים מאוד (320px): כפתורי מגע קטנים יותר, כדי שהגז לא ייחתך */
+@media (max-width: 360px) {
+  #touch { padding: 0 10px; }
+  .touch-group { gap: 8px; }
+  .touch-btn { width: 64px; height: 64px; font-size: 1.3rem; }
+  .touch-gas { width: 76px; height: 76px; font-size: 1.15rem; }
+  .touch-brake { font-size: 1rem; }
+  .touch-nitro { width: 54px; height: 54px; font-size: .85rem; }
+}

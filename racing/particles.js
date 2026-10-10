@@ -2,18 +2,17 @@
 
 import * as THREE from "three";
 
-/* עיגול לבן עם קו מתאר כהה, נצבע לפי סוג החלקיק */
+/* כתם רך (שקוף בשוליים) — נצבע לפי סוג החלקיק: עשן, אבק, ניצוץ */
 const texture = (() => {
   const c = document.createElement("canvas");
   c.width = c.height = 64;
   const g = c.getContext("2d");
-  g.beginPath();
-  g.arc(32, 32, 26, 0, Math.PI * 2);
-  g.fillStyle = "#ffffff";
-  g.fill();
-  g.lineWidth = 5;
-  g.strokeStyle = "rgba(26,31,46,.85)";
-  g.stroke();
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 31);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.45, "rgba(255,255,255,.7)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;

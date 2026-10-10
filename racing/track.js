@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import { PALETTE, toon, outlined } from "./toon.js";
+import { asphalt, ground as groundTex } from "./textures.js";
 import { buildScenery } from "./scenery.js";
 
 export const ROAD_HALF = 7;               // חצי רוחב הכביש
@@ -146,7 +147,10 @@ export class Track {
     /* הקרקע מכסה את כל המסלול ועוד שוליים רחבים, לא משנה כמה הוא גדול */
     const { minX, maxX, minZ, maxZ } = this.bounds;
     const size = Math.max(maxX - minX, maxZ - minZ) + 1400;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), toon(this.theme.ground));
+    const tex = groundTex(this.def.scenery).clone();
+    tex.repeat.setScalar(size / 14);
+    tex.needsUpdate = true;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((minX + maxX) / 2, -0.15, (minZ + maxZ) / 2);
     ground.receiveShadow = true;
@@ -162,18 +166,24 @@ export class Track {
   }
 
   /* רצועה לאורך המסלול בין שני היסטים צדדיים, בגובה הכביש. צבע לכל מקטע, כדי לקבל פסים חדים */
-  ribbon(fromOffset, toOffset, lift, colorAt, { step = 1, from = 0, to = this.count, opacity = 1 } = {}) {
+  ribbon(fromOffset, toOffset, lift, colorAt, { step = 1, from = 0, to = this.count, opacity = 1, material = null, tile = 0, across = 1 } = {}) {
     const extra = { vertexColors: true, side: THREE.DoubleSide };
     if (opacity < 1) Object.assign(extra, { transparent: true, opacity, depthWrite: false });
-    const material = toon(0xffffff, extra);
+    material ||= toon(0xffffff, extra);
     const c = new THREE.Color();
     this.chunks(from, to, step, (start, end) => {
       const pos = [];
       const col = [];
+      const uv = [];
       for (let i = start; i < end; i += step) {
         const ii = this.wrap(i), j = this.wrap(i + step);
         const a = this.points[ii], b = this.points[j];
         const la = this.lefts[ii], lb = this.lefts[j];
+        if (tile) {
+          /* טקסטורה: לרוחב פעם אחת על כל הרצועה, לאורך — חוזרת כל tile יחידות */
+          const va = (i * this.spacing) / tile, vb = ((i + step) * this.spacing) / tile;
+          uv.push(0, va, 0, vb, across, va, across, va, 0, vb, across, vb);
+        }
         const a1 = [a.x + la.x * fromOffset, a.y + lift, a.z + la.z * fromOffset];
         const a2 = [a.x + la.x * toOffset, a.y + lift, a.z + la.z * toOffset];
         const b1 = [b.x + lb.x * fromOffset, b.y + lift, b.z + lb.z * fromOffset];
@@ -185,6 +195,7 @@ export class Track {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
       geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+      if (tile) geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
       geo.computeVertexNormals();
       const mesh = new THREE.Mesh(geo, material);
       mesh.receiveShadow = true;
@@ -195,11 +206,19 @@ export class Track {
   buildRoad() {
     const th = this.theme;
     const stripe = (a, b) => (i) => (Math.floor(i / 6) % 2 ? a : b);
-    /* השוליים בין הכביש לקיר, בגובה הכביש */
-    this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.02, () => th.embank, { step: 2 });
-    /* פס דיו סביב הכביש — אותו קו מתאר כמו בשאר העולם */
-    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.08, () => PALETTE.ink);
-    this.ribbon(-ROAD_HALF, ROAD_HALF, ROAD_TOP, () => PALETTE.road);
+    /* השוליים בין הכביש לקיר: אותה קרקע כמו מסביב */
+    const kind = this.def.scenery;
+    const shoulder = new THREE.MeshStandardMaterial({ map: groundTex(kind), vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 });
+    this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.02, () => 0xffffff, { step: 2, material: shoulder, tile: 14, across: (WALL_OFFSET * 2) / 14 });
+    /* שולי חצץ כהים מעבר לאבני השפה */
+    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.08, () => 0x55585e, {});
+    /* אספלט עם גרגרים ועקבות צמיגים */
+    const road = new THREE.MeshStandardMaterial({ map: asphalt(), vertexColors: true, side: THREE.DoubleSide, roughness: 0.92 });
+    this.ribbon(-ROAD_HALF, ROAD_HALF, ROAD_TOP, () => 0xffffff, { material: road, tile: 14 });
+    /* קווי שוליים לבנים רציפים */
+    for (const side of [1, -1]) {
+      this.ribbon(side * (ROAD_HALF - 0.75), side * (ROAD_HALF - 0.45), ROAD_TOP + 0.03, () => 0xf2f2ee);
+    }
     this.ribbon(ROAD_HALF - 0.05, ROAD_HALF + 1.4, 0.16, stripe(th.curbA, th.curbB));
     this.ribbon(-ROAD_HALF - 1.4, -ROAD_HALF + 0.05, 0.16, stripe(th.curbA, th.curbB));
 
@@ -254,9 +273,9 @@ export class Track {
         wall.castShadow = true;
         this.group.add(wall);
       });
-      /* פס דיו עבה על ראש הקיר */
+      /* מעקה מתכת על ראש הקיר */
       const w = WALL_OFFSET * side;
-      this.ribbon(w - 0.2, w + 0.2, h + 0.01, () => PALETTE.ink, { step });
+      this.ribbon(w - 0.2, w + 0.2, h + 0.01, () => 0x9aa1ab, { step });
     }
   }
 

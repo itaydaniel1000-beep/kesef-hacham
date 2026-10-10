@@ -1,6 +1,7 @@
 /* ===== מירוץ תלת-ממד — לולאת המשחק, מוסך ואפקטים ===== */
 
 import * as THREE from "three";
+import { Sky } from "three/addons/objects/Sky.js";
 import { PALETTE } from "./toon.js";
 import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
@@ -69,25 +70,51 @@ function saveSettings() {
 
 const canvas = $("scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const coarse = matchMedia("(pointer: coarse)").matches;
+renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color();
 scene.fog = new THREE.Fog(0xffffff, 140, 330);
 
 const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 900);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x7fae6f, 1.1);
+/* שמיים פיזיקליים (פיזור אור באטמוספרה) שנעים עם המצלמה */
+const sky = new Sky();
+sky.scale.setScalar(800);
+scene.add(sky);
+const sunDir = new THREE.Vector3();
+
+/* מפת סביבה מהשמיים — ממנה ההשתקפויות על הלכה והזכוכית. נבנית פעם אחת לכל מסלול */
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMaps = new Map();
+function skyEnvironment(id) {
+  if (!envMaps.has(id)) {
+    const envScene = new THREE.Scene();
+    const envSky = new Sky();
+    envSky.scale.setScalar(100);
+    for (const k of ["turbidity", "rayleigh", "mieCoefficient", "mieDirectionalG", "sunPosition"]) {
+      envSky.material.uniforms[k].value = sky.material.uniforms[k].value;
+    }
+    envScene.add(envSky);
+    envMaps.set(id, pmrem.fromScene(envScene).texture);
+  }
+  return envMaps.get(id);
+}
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x7fae6f, 0.35);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.setScalar(coarse ? 1024 : 2048);
 const sc = sun.shadow.camera;
-sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 160;
-sun.shadow.bias = -0.0008;
+sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 220;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
 const particles = new Particles(scene);
@@ -110,8 +137,15 @@ function useTrack(id) {
   if (track.built) scene.add(track.group);
   else track.build(scene);
   const th = track.theme;
-  scene.background.set(th.sky);
-  scene.fog.color.set(th.sky);
+  const u = sky.material.uniforms;
+  u.turbidity.value = th.turbidity;
+  u.rayleigh.value = th.rayleigh;
+  u.mieCoefficient.value = 0.004;
+  u.mieDirectionalG.value = 0.8;
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - th.sun[0]), THREE.MathUtils.degToRad(th.sun[1]));
+  u.sunPosition.value.copy(sunDir);
+  scene.environment = skyEnvironment(track.def.id);
+  scene.fog.color.set(th.haze);
   scene.fog.near = th.fog[0];
   scene.fog.far = th.fog[1];
   hemi.groundColor.set(th.hemiGround);
@@ -345,6 +379,7 @@ function startRace() {
   show("touch", isTouch);
   show("countdown", true);
   audio.start();
+  updateCountdown(); // "3" כבר בפריים הראשון — לא "צא!" מהמירוץ הקודם
 }
 
 /* הקול פעיל רק כשהמשחק לא בהשהיה והעמוד גלוי — מקום אחד שמחליט, ונקרא מכל מעבר מצב */
@@ -694,7 +729,8 @@ function updateCamera(dt, target, orbit = 0) {
     }
   }
   /* השמש וצלה עוקבים אחרי המכונית */
-  sun.position.set(target.x + 30, target.y + 60, target.z + 20);
+  sky.position.copy(camera.position);
+  sun.position.set(target.x + sunDir.x * 120, target.y + sunDir.y * 120, target.z + sunDir.z * 120);
   sun.target.position.set(target.x, target.y, target.z);
 }
 

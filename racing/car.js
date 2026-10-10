@@ -1,7 +1,8 @@
 /* ===== מכונית: דגם מצורות פשוטות + פיזיקה ארקיידית עם דריפט, ניטרו וקפיצות ===== */
 
 import * as THREE from "three";
-import { PALETTE, toon, outlined, shared, disposeTree } from "./toon.js";
+import { shared, disposeTree } from "./toon.js";
+import { rimFace } from "./textures.js";
 import { ROAD_HALF, WALL_OFFSET, ROAD_TOP, angleDiff } from "./track.js";
 
 export const CAR_RADIUS = 1.7;
@@ -27,10 +28,42 @@ export const CAR_TYPES = {
   }
 };
 
-const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.42, 14));
-const hubGeo = shared(new THREE.CylinderGeometry(0.2, 0.2, 0.44, 8));
-const strutGeo = shared(new THREE.BoxGeometry(0.14, 0.45, 0.14));
-const flameGeo = shared(new THREE.ConeGeometry(0.28, 1.4, 8));
+const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.4, 20));
+const strutGeo = shared(new THREE.BoxGeometry(0.1, 0.45, 0.22));
+const flameGeo = shared(new THREE.ConeGeometry(0.24, 1.4, 10));
+const headGeo = shared(new THREE.BoxGeometry(0.5, 0.13, 0.2));
+const tailGeo = shared(new THREE.BoxGeometry(0.55, 0.12, 0.05));
+const mirrorGeo = shared(new THREE.BoxGeometry(0.22, 0.13, 0.12));
+
+const glassMat = shared(new THREE.MeshPhysicalMaterial({ color: 0x0d1117, roughness: 0.05, metalness: 0.6, clearcoat: 1 }));
+const trimMat = shared(new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.6 }));
+const carbonMat = shared(new THREE.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.35, metalness: 0.5 }));
+const headMat = shared(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 1.2 }));
+const flameMat = shared(new THREE.MeshBasicMaterial({ color: 0xffa64a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+/* צמיג: צד מגומי מט, ושני הצדדים השטוחים — חישוק מתכת עם חישורים */
+const rimMat = shared(new THREE.MeshStandardMaterial({ map: rimFace(), roughness: 0.3, metalness: 0.8 }));
+const tireMats = [shared(new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.95 })), rimMat, rimMat];
+
+/* צבע מכונית: לכה עם שכבת ברק (clearcoat) — משקפת את השמיים */
+const paints = new Map();
+function paintMaterial(color) {
+  if (!paints.has(color)) {
+    paints.set(color, shared(new THREE.MeshPhysicalMaterial({ color, roughness: 0.45, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.1, envMapIntensity: 0.45 })));
+  }
+  return paints.get(color);
+}
+
+/* פרופיל צד (z, y) שנמתח לרוחב width סביב x=0, עם שוליים מעוגלים */
+function profile(points, width, bevel) {
+  const shape = new THREE.Shape(points.map(([z, y]) => new THREE.Vector2(z, y)));
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: Math.max(0.05, width - bevel * 2), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3, curveSegments: 4
+  });
+  geo.translate(0, 0, -(width - bevel * 2) / 2);
+  geo.rotateY(-Math.PI / 2); // הפרופיל היה במישור x-y; עכשיו האורך לאורך z והרוחב לאורך x
+  geo.computeVertexNormals();
+  return geo;
+}
 
 export class Car {
   constructor({ name, color, type = "grip", speedScale = 1 }) {
@@ -87,73 +120,88 @@ export class Car {
     car.add(body);
     this.body = body;
 
-    const box = (w, h, d, color, x, y, z, line = 0.07) => {
-      const m = outlined(new THREE.BoxGeometry(w, h, d), color, line);
+    const paint = paintMaterial(this.color);
+    const add = (geo, mat, x = 0, y = 0, z = 0, shadow = true) => {
+      const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
+      m.castShadow = shadow;
       body.add(m);
       return m;
     };
 
-    box(s.width, s.height, s.len, this.color, 0, 0.45 + s.height / 2, 0);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5, s.height + 0.02, s.len + 0.02), toon(PALETTE.surface));
-    stripe.position.y = 0.45 + s.height / 2;
-    body.add(stripe);
-    box(s.width * 0.8, 0.45, 1.1, this.color, 0, 0.6, s.len / 2 + 0.25);
-    const top = 0.45 + s.height;
-    box(s.width * 0.76, 0.62, s.cabin, PALETTE.surface, 0, top + 0.3, -0.3);
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(s.width * 0.78, 0.36, s.cabin * 0.8), toon(PALETTE.ink));
-    glass.position.set(0, top + 0.35, -0.25);
-    body.add(glass);
+    /* שלדה: פרופיל צד אמיתי (חרטום נמוך, מכסה מנוע, תא מטען) שנמתח לרוחב המכונית, עם קצוות מעוגלים */
+    const a = s.len / 2, y0 = 0.32, top = 0.45 + s.height;
+    const zf = Math.min(a - 0.6, -0.3 + s.cabin / 2 + 0.45); // בסיס השמשה הקדמית
+    const zr = -0.3 - s.cabin / 2 - 0.2;                       // בסיס החלון האחורי
+    const hull = profile([
+      [-a + 0.15, y0], [a - 0.4, y0], [a, y0 + 0.2], [a - 0.04, y0 + 0.42],
+      [a - 0.3, top - 0.12], [zf, top], [-a + 0.35, top], [-a, top - 0.14], [-a - 0.04, y0 + 0.25]
+    ], s.width, 0.12);
+    add(hull, paint);
+
+    /* תא הנוסעים: זכוכית כהה, ועליה גג בצבע המכונית */
+    const roofY = top + 0.6;
+    const cabinW = s.width * 0.8;
+    add(profile([[zf, top - 0.02], [zf - 0.8, roofY], [zr + 0.45, roofY], [zr, top - 0.02]], cabinW, 0.06), glassMat);
+    const roofLen = (zf - 0.8) - (zr + 0.45);
+    add(new THREE.BoxGeometry(cabinW - 0.02, 0.07, roofLen + 0.1), paint, 0, roofY + 0.02, (zf - 0.8 + zr + 0.45) / 2);
+
+    /* פנסים: לבנים מקדימה, אדומים מאחור — האחוריים מתחזקים כשבולמים */
+    this.tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0a0a, emissive: 0xff2a1a, emissiveIntensity: 0.6 });
+    for (const side of [1, -1]) {
+      add(headGeo, headMat, side * s.width * 0.32, y0 + 0.36, a - 0.08, false).rotation.x = -0.5;
+      add(tailGeo, this.tailMat, side * s.width * 0.3, top - 0.2, -a - 0.03, false);
+    }
+    /* גריל ומפזר אוויר כהים */
+    add(new THREE.BoxGeometry(s.width * 0.5, 0.16, 0.06), trimMat, 0, y0 + 0.17, a - 0.02, false);
+    add(new THREE.BoxGeometry(s.width * 0.75, 0.14, 0.06), trimMat, 0, y0 + 0.08, -a + 0.05, false);
+    /* מראות צד */
+    for (const side of [1, -1]) add(mirrorGeo, paint, side * (cabinW / 2 + 0.12), top + 0.12, zf - 0.25, false);
 
     if (s.wing) {
-      const wing = box(s.wing, 0.14, 0.5, PALETTE.ink, 0, s.wingY, -s.len / 2 + 0.2, 0.05);
-      for (const side of [1, -1]) {
-        const strut = new THREE.Mesh(strutGeo, wing.material);
-        strut.position.set(side * 0.6, s.wingY - 0.3, -s.len / 2 + 0.2);
-        body.add(strut);
-      }
+      add(new THREE.BoxGeometry(s.wing, 0.07, 0.55), carbonMat, 0, s.wingY, -a + 0.2);
+      for (const side of [1, -1]) add(strutGeo, carbonMat, side * 0.6, (top + s.wingY) / 2 - 0.02, -a + 0.25, false).scale.y = (s.wingY - top + 0.1) / 0.45;
     } else {
-      /* מכונית התאוצה: סקופ אוויר על הגג במקום כנף */
-      box(0.7, 0.35, 0.8, PALETTE.ink, 0, top + 0.78, 0.1, 0.05);
+      /* מכונית התאוצה: סקופ אוויר על מכסה המנוע במקום כנף */
+      add(new THREE.BoxGeometry(0.7, 0.16, 0.7), carbonMat, 0, top + 0.06, (zf + a) / 2 - 0.1);
     }
 
     /* להבות ניטרו מהאגזוז */
     this.flames = new THREE.Group();
     for (const side of [0.45, -0.45]) {
-      const flame = outlined(flameGeo, PALETTE.gold, 0.05);
+      const flame = new THREE.Mesh(flameGeo, flameMat);
       flame.rotation.x = -Math.PI / 2;
-      flame.position.set(side, 0.75, -s.len / 2 - 0.7);
+      flame.position.set(side, y0 + 0.2, -a - 0.7);
       this.flames.add(flame);
     }
     this.flames.visible = false;
     body.add(this.flames);
 
-    /* גלגלים: ציר היגוי (קדמיים) -> ציר סיבוב -> הגלגל */
+    /* גלגלים: ציר היגוי (קדמיים) -> ציר סיבוב -> צמיג וחישוק */
     this.wheels = [];
     this.frontPivots = [];
-    const wx = s.width / 2 + 0.05, wz = s.len / 2 - 0.75;
+    const wx = s.width / 2 - 0.08, wz = a - 0.8;
     for (const [x, z, front] of [[wx, wz, true], [-wx, wz, true], [wx, -wz, false], [-wx, -wz, false]]) {
       const pivot = new THREE.Group();
       pivot.position.set(x, 0.46, z);
       const spin = new THREE.Group();
-      const wheel = outlined(wheelGeo, PALETTE.ink, 0.04);
-      wheel.rotation.z = Math.PI / 2;
-      const hub = new THREE.Mesh(hubGeo, toon(PALETTE.gold));
-      hub.rotation.z = Math.PI / 2;
-      spin.add(wheel, hub);
+      const tire = new THREE.Mesh(wheelGeo, tireMats);
+      tire.rotation.z = Math.PI / 2;
+      tire.castShadow = true;
+      spin.add(tire);
       pivot.add(spin);
       car.add(pivot);
       this.wheels.push(spin);
       if (front) this.frontPivots.push(pivot);
     }
 
-    /* צל עגול רך מתחת למכונית — נשאר על הקרקע גם כשהמכונית באוויר */
+    /* צל רך מתחת למכונית (מגע עם הקרקע) — נשאר על הקרקע גם כשהמכונית באוויר */
     this.blob = new THREE.Mesh(
       new THREE.CircleGeometry(2.4, 20),
-      new THREE.MeshBasicMaterial({ color: PALETTE.ink, transparent: true, opacity: 0.25, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false })
     );
     this.blob.rotation.x = -Math.PI / 2;
-    this.blob.scale.set(0.75, 1.15, 1);
+    this.blob.scale.set(0.62, 1.05, 1);
     this.blob.position.y = 0.1;
     car.add(this.blob);
 
@@ -377,6 +425,7 @@ export class Car {
 
     const flaming = this.nitroOn || this.padBoost > 0.4;
     this.flames.visible = flaming;
+    this.tailMat.emissiveIntensity = this.input.brake > 0 && this.speed > 0.5 ? 3 : 0.6; // פנסי בלם
     if (flaming) {
       const f = 0.8 + Math.random() * 0.5;
       for (const fl of this.flames.children) fl.scale.set(1, f, 1);

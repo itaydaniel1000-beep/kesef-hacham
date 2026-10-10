@@ -1,4 +1,4 @@
-/* ===== חומרים בסגנון "מדבקה": צבע שטוח, שלושה גוונים, קו מתאר שחור ===== */
+/* ===== חומרים: PBR רגיל (MeshStandardMaterial) עם מטמון, ושחרור זיכרון ===== */
 
 import * as THREE from "three";
 
@@ -17,17 +17,6 @@ export const PALETTE = {
   skyBg: 0xbfe0f7
 };
 
-/* מפת גוונים קשיחה: שלוש מדרגות אור בלי מעבר רך */
-const gradient = (() => {
-  const data = new Uint8Array([90, 170, 255]);
-  const tex = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat);
-  tex.minFilter = THREE.NearestFilter;
-  tex.magFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  tex.needsUpdate = true;
-  return tex;
-})();
-
 const cache = new Map();
 
 /* משאבים משותפים (חומרים מהמטמון, גאומטריות של מודול) מסומנים, כדי ששחרור לא ימחק אותם */
@@ -43,35 +32,23 @@ export function disposeTree(root) {
     if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
     for (const m of [].concat(o.material || [])) {
       if (m.userData.shared) continue;
-      m.map?.dispose();
+      if (m.map && !m.map.userData.shared) m.map.dispose();
       m.dispose();
     }
   });
 }
 
+/* חומר מט רגיל — רוב העולם (עץ, סלע, אדמה, צבע) מחזיר אור בלי ברק */
 export function toon(color, extra = {}) {
   const key = color + JSON.stringify(extra);
-  if (!cache.has(key)) cache.set(key, shared(new THREE.MeshToonMaterial({ color, gradientMap: gradient, ...extra })));
+  if (!cache.has(key)) cache.set(key, shared(new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, envMapIntensity: 0.6, ...extra })));
   return cache.get(key);
 }
 
-const outlineMaterial = shared(new THREE.MeshBasicMaterial({ color: PALETTE.ink, side: THREE.BackSide }));
-
-/* רשת עם קו מתאר: עותק הפוך ומוגדל קצת, בצבע הדיו */
-export function outlined(geometry, color, thickness = 0.07) {
+/* רשת עם צל (השם נשאר מהגרסה המצוירת; קו המתאר הוסר במראה הריאליסטי) */
+export function outlined(geometry, color) {
   const mesh = new THREE.Mesh(geometry, typeof color === "number" ? toon(color) : color);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  geometry.computeBoundingBox();
-  const size = new THREE.Vector3();
-  geometry.boundingBox.getSize(size);
-  const shell = new THREE.Mesh(geometry, outlineMaterial);
-  /* עובי קבוע בכל ציר, לא אחוז מהגודל — כדי שקופסה ארוכה לא תקבל קו עבה בקצוות */
-  shell.scale.set(
-    1 + (2 * thickness) / Math.max(size.x, 0.01),
-    1 + (2 * thickness) / Math.max(size.y, 0.01),
-    1 + (2 * thickness) / Math.max(size.z, 0.01)
-  );
-  mesh.add(shell);
   return mesh;
 }

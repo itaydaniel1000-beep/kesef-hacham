@@ -401,6 +401,8 @@ addEventListener("keydown", (e) => {
     return;
   }
   /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
+  /* על "למוסך" או על "איך נוהגים?" Enter עושה את מה שהם עושים — לא מתחיל מירוץ */
+  if (e.target instanceof Element && e.target.closest("#garageButton, summary")) return;
   if (e.code === "Enter" && (state === "menu" || (state === "finished" && !resultsShownAt))) {
     e.preventDefault();
     startRace();
@@ -734,6 +736,7 @@ function step(dt) {
 
   if (player.finished && state === "race") {
     state = "finished";
+    show("touch", false); // מעכשיו המחשב נוהג — הכפתורים כבר לא עושים כלום
     resultsShownAt = race.time + 1.8;
     audio.fanfare(race.placeOf(player) === 1);
     celebrate();

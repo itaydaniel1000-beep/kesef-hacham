@@ -52,10 +52,11 @@ export function buildScenery(track) {
     const side = rand() < 0.5 ? -1 : 1;
     const dist = WALL_OFFSET + 6 + p.y * 1.6 + rand() * 75;
     const x = p.x + l.x * side * dist, z = p.z + l.z * side * dist;
-    const c = track.clearance(x, z);
-    if (c < 1) continue;
     const thing = maker(rand);
-    thing.scale.multiplyScalar(0.8 + rand() * 0.7);
+    const scale = 0.8 + rand() * 0.7;
+    /* גם הקצה של עצם רחב (דיונה) צריך להישאר מחוץ לקיר, לא רק המרכז שלו */
+    if (track.clearance(x, z) < 1 + (thing.userData.radius || 0) * scale) continue;
+    thing.scale.multiplyScalar(scale);
     thing.rotation.y = rand() * Math.PI * 2;
     thing.position.set(x, 0, z);
     chunkAt(x, z).add(thing);
@@ -141,6 +142,7 @@ function desertThing(rand) {
     const dune = outlined(geo.dune, 0xe8c27a, 0.025);
     dune.scale.set(7, 2.2, 5);
     t.add(dune);
+    t.userData.radius = 7;
   }
   return t;
 }

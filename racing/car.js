@@ -178,6 +178,9 @@ export class Car {
     /* מתחילים מעט לפני קו הסיום, לכן המרחק שלילי */
     this.distance = index > track.count / 2 ? index - track.count : index;
     this.syncMesh(0, track);
+    /* במקום החדש המכונית עומדת ישר — בלי ההטיה שנשארה מהקפיצה או מהדריפט הקודמים */
+    this.mesh.rotation.x = -Math.atan(track.slopes[index]);
+    this.body.rotation.z = 0;
   }
 
   update(dt, track, others) {
@@ -228,6 +231,7 @@ export class Car {
       /* עלייה מאטה, ירידה מאיצה */
       this.speed -= track.slopes[this.trackIndex] * 9 * dt;
       if (this.speed > top) this.speed = Math.max(top, this.speed - (offRoad ? 45 : 20) * dt);
+      if (this.speed < -15) this.speed = -15; // גם ברוורס בירידה יש תקרה
     }
 
     /* פנייה: אפס בעמידה, הכי חד במהירות בינונית, קצת פחות במהירות גבוהה; בדריפט חד יותר */

@@ -123,7 +123,10 @@ let autopilot = null;
 let cooldownDriver = null;
 
 function buildCars() {
-  for (const car of cars) scene.remove(car.mesh);
+  for (const car of cars) {
+    scene.remove(car.mesh);
+    car.dispose();
+  }
   const level = LEVELS[settings.level];
   const mine = COLORS.find((c) => c.color === settings.color);
   player = new Car({ name: "אני", color: mine.color, type: settings.type });
@@ -636,8 +639,8 @@ function updateCamera(dt, target, orbit = 0) {
   }
   /* במסלול ענק מציירים רק את הנוף הקרוב, והשמיים (הרים ועננים) נעים עם המצלמה */
   if (track.sky) track.sky.position.set(camera.position.x, 0, camera.position.z);
-  if (track.chunks) {
-    for (const c of track.chunks) {
+  if (track.sceneryChunks) {
+    for (const c of track.sceneryChunks) {
       c.group.visible = Math.abs(c.x - camera.position.x) < 420 && Math.abs(c.z - camera.position.z) < 420;
     }
   }
@@ -653,6 +656,8 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  /* שינוי גודל מוחק את התמונה; בהשהיה לא מציירים בכל פריים, אז מציירים פעם אחת עכשיו */
+  if (state === "paused") renderer.render(scene, camera);
 }
 addEventListener("resize", resize);
 resize();
@@ -697,7 +702,6 @@ function step(dt) {
   resolveCollisions(cars);
   race.update(dt);
 
-  player.justLapped = false;
   if (player.finished && state === "race") {
     state = "finished";
     resultsShownAt = race.time + 1.8;
@@ -711,6 +715,8 @@ function step(dt) {
 }
 
 function frame(now) {
+  /* מקשי המשחק "נבלעים" רק בזמן מירוץ; במוסך ובתוצאות רווח וחצים עובדים כרגיל על כפתורים */
+  input.capture = RACING.includes(state);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)) * TIME_SCALE;
   last = now;
 

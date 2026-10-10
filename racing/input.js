@@ -13,12 +13,13 @@ export class Input {
   constructor() {
     this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
     this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false };
+    this.capture = false; // main.js מדליק את זה בזמן מירוץ
 
     addEventListener("keydown", (e) => {
       const k = KEYS[e.code];
       if (!k) return;
       this.keys[k] = true;
-      e.preventDefault();
+      if (this.capture) e.preventDefault();
     });
     addEventListener("keyup", (e) => {
       const k = KEYS[e.code];

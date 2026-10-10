@@ -229,8 +229,8 @@ export const TRACKS = [
     control: snow,
     boosts: padsEvery(4, 0.1),
     ice: [[0.62, 0.66], [0.86, 0.9]],
-    /* מכל גובה כזה ומעלה הכביש הוא גשר: בלי סוללת עפר, עם עמודים */
-    bridge: { minY: 4.5 },
+    /* מכל גובה כזה ומעלה הכביש הוא גשר (הגשר ב-8.5; סיכת הראש בהר מגיעה רק ל-6): בלי סוללת עפר, עם עמודים */
+    bridge: { minY: 7 },
     theme: {
       ground: 0xeef3f8, embank: 0xdfe8f1, sky: 0xd3e5f5, fog: [120, 300],
       curbA: PALETTE.sky, curbB: PALETTE.surface, wallA: PALETTE.purple, wallB: PALETTE.surface,

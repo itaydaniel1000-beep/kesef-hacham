@@ -1,13 +1,21 @@
 /* ===== המסלול: עקומה סגורה עם גובה, כביש, שוליים, קיר, סוללות, גשר וקו סיום ===== */
 
 import * as THREE from "three";
-import { PALETTE, toon, outlined } from "./toon.js";
+import { PALETTE, toon, outlined, disposeTree } from "./toon.js";
 import { buildScenery } from "./scenery.js";
 
 export const ROAD_HALF = 7;               // חצי רוחב הכביש
 export const WALL_OFFSET = ROAD_HALF + 7; // איפה עומד הקיר מהמרכז
 /* שכבות הכביש מונחות זו מעל זו עם רווח, כדי שלא יהבהבו זו דרך זו מרחוק. זה גובה פני האספלט */
 export const ROAD_TOP = 0.14;
+
+/* ההפרש בין שתי זוויות, בין ‎-π ל-π */
+export const angleDiff = (a, b) => {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+};
 const SAMPLE_SPACING = 1.6;            // מרחק בין דגימות לאורך המסלול
 const CHUNK_SAMPLES = 320;             // כמה דגימות בכל חלק של הגאומטריה (כ-500 יחידות)
 const EMBANK_SLOPE = 1.6;                 // כמה רחוק יוצאת הסוללה לכל יחידת גובה
@@ -105,14 +113,6 @@ export class Track {
     return best;
   }
 
-  /* זווית הפנייה בין i לבין i+ahead — מדד לחדות העיקול */
-  curvature(i, ahead) {
-    let a = this.headings[this.wrap(i + ahead)] - this.headings[this.wrap(i)];
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a < -Math.PI) a += Math.PI * 2;
-    return Math.abs(a);
-  }
-
   /* מטריצה שמניחה משטח שטוח על הכביש: X לרוחב, Y קדימה לאורך השיפוע, Z למעלה */
   surfaceMatrix(i, lateral, lift) {
     const p = this.points[i], l = this.lefts[i], t = this.tangents[i];
@@ -137,12 +137,9 @@ export class Track {
 
   dispose(scene) {
     scene.remove(this.group);
-    this.group.traverse((o) => {
-      o.geometry?.dispose();
-      /* חומרים משותפים נשמרים במטמון של toon.js — משחררים רק טקסטורות שנוצרו כאן */
-      for (const m of [].concat(o.material || [])) m.map?.dispose();
-    });
+    disposeTree(this.group);
   }
+
 
   buildGround() {
     /* הקרקע מכסה את כל המסלול ועוד שוליים רחבים, לא משנה כמה הוא גדול */

@@ -1,7 +1,7 @@
 /* ===== נוף לכל מסלול: עצים, קקטוסים, אנשי שלג, יציע, עננים והרים ברקע ===== */
 
 import * as THREE from "three";
-import { PALETTE, toon, outlined } from "./toon.js";
+import { PALETTE, toon, outlined, shared } from "./toon.js";
 import { WALL_OFFSET } from "./track.js";
 
 const geo = {
@@ -21,6 +21,7 @@ const geo = {
   step: new THREE.BoxGeometry(3, 1.2, 40),
   fan: new THREE.SphereGeometry(0.55, 8, 6)
 };
+for (const g of Object.values(geo)) shared(g);
 
 export function buildScenery(track) {
   const g = track.group;
@@ -60,7 +61,7 @@ export function buildScenery(track) {
     chunkAt(x, z).add(thing);
     placed++;
   }
-  track.chunks = [...chunks.values()];
+  track.sceneryChunks = [...chunks.values()];
 
   /* שמיים: הרים ועננים בטבעת שנעה יחד עם המצלמה — במסלול ענק הם תמיד באופק */
   const sky = new THREE.Group();
@@ -68,7 +69,7 @@ export function buildScenery(track) {
   track.sky = sky;
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2 + rand() * 0.2;
-    const r = 300 + rand() * 40;
+    const r = 230 + rand() * 30; // בתוך הערפל, כדי שייראו כצלליות באופק
     const far = backdrop(track.def.scenery, rand);
     far.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     sky.add(far);

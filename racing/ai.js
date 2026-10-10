@@ -1,6 +1,6 @@
 /* ===== נהג מחשב: קו מירוץ מחושב, תכנון מהירות לפי גבולות המכונית, עקיפות וניטרו ===== */
 
-import { ROAD_HALF } from "./track.js";
+import { ROAD_HALF, angleDiff } from "./track.js";
 
 const LINE_LIMIT = ROAD_HALF - 2.2; // כמה רחוק מהמרכז קו המירוץ מרשה לעצמו (חצי מכונית + שוליים)
 const BRAKE = 30;                   // האטה שהנהג מתכנן איתה — קצת פחות מהבלם המלא, ליתר ביטחון
@@ -28,9 +28,7 @@ function racingLine(track) {
   for (let i = 0; i < n; i++) {
     const [x0, z0] = at(track.wrap(i - s)), [x1, z1] = at(i), [x2, z2] = at(track.wrap(i + s));
     const h1 = Math.atan2(x1 - x0, z1 - z0), h2 = Math.atan2(x2 - x1, z2 - z1);
-    let d = h2 - h1;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
+    const d = angleDiff(h2, h1);
     curv[i] = Math.abs(d) / Math.max(0.1, Math.hypot(x1 - x0, z1 - z0) / 2 + Math.hypot(x2 - x1, z2 - z1) / 2);
   }
   /* מחליקים מעט — כדי שרעש קטן בקו לא ייראה כמו פנייה */
@@ -131,9 +129,7 @@ export class Driver {
     const lat = Math.max(-ROAD_HALF + 1.2, Math.min(ROAD_HALF - 1.2, line.off[ti] + this.lane + this.avoid));
     const p = track.points[ti], l = track.lefts[ti];
     const tx = p.x + l.x * lat, tz = p.z + l.z * lat;
-    let alpha = Math.atan2(tx - car.x, tz - car.z) - car.heading;
-    while (alpha > Math.PI) alpha -= Math.PI * 2;
-    while (alpha < -Math.PI) alpha += Math.PI * 2;
+    const alpha = angleDiff(Math.atan2(tx - car.x, tz - car.z), car.heading);
     const dist = Math.max(3, Math.hypot(tx - car.x, tz - car.z));
     /* העקמומיות שצריך כדי להגיע לנקודה, חלקי העקמומיות שהמכונית מסוגלת לה במהירות הזאת */
     const need = (2 * Math.sin(alpha)) / dist;

@@ -1,8 +1,8 @@
 /* ===== מכונית: דגם מצורות פשוטות + פיזיקה ארקיידית עם דריפט, ניטרו וקפיצות ===== */
 
 import * as THREE from "three";
-import { PALETTE, toon, outlined } from "./toon.js";
-import { ROAD_HALF, WALL_OFFSET, ROAD_TOP } from "./track.js";
+import { PALETTE, toon, outlined, shared, disposeTree } from "./toon.js";
+import { ROAD_HALF, WALL_OFFSET, ROAD_TOP, angleDiff } from "./track.js";
 
 export const CAR_RADIUS = 1.7;
 const GRAVITY = 26;
@@ -26,17 +26,10 @@ export const CAR_TYPES = {
   }
 };
 
-const wheelGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.42, 14);
-const hubGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.44, 8);
-const strutGeo = new THREE.BoxGeometry(0.14, 0.45, 0.14);
-const flameGeo = new THREE.ConeGeometry(0.28, 1.4, 8);
-
-const angleDiff = (a, b) => {
-  let d = a - b;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
-};
+const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.42, 14));
+const hubGeo = shared(new THREE.CylinderGeometry(0.2, 0.2, 0.44, 8));
+const strutGeo = shared(new THREE.BoxGeometry(0.14, 0.45, 0.14));
+const flameGeo = shared(new THREE.ConeGeometry(0.28, 1.4, 8));
 
 export class Car {
   constructor({ name, color, type = "grip", speedScale = 1 }) {
@@ -81,8 +74,6 @@ export class Car {
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
     this.finished = false;
     this.finishTime = 0;
-    this.lapTimes = [];
-    this.lapStart = 0;
   }
 
   buildMesh(s) {
@@ -165,6 +156,11 @@ export class Car {
     return car;
   }
 
+  /* שחרור הגאומטריות והחומרים של המכונית הזאת (כשבונים מכוניות חדשות במוסך) */
+  dispose() {
+    disposeTree(this.mesh);
+  }
+
   placeAt(track, index, lateral) {
     this.reset();
     const p = track.points[index], l = track.lefts[index];
@@ -174,7 +170,6 @@ export class Car {
     this.groundHeight = p.y;
     this.heading = this.moveHeading = track.headings[index];
     this.trackIndex = index;
-    this.trackCount = track.count;
     this.lateral = lateral;
     /* מתחילים מעט לפני קו הסיום, לכן המרחק שלילי */
     this.distance = index > track.count / 2 ? index - track.count : index;

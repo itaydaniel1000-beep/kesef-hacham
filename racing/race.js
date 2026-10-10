@@ -9,7 +9,6 @@ export class Race {
     this.cars = cars;
     this.player = player;
     this.time = 0;
-    this.finishOrder = [];
   }
 
   /* מתקדמים לפי מרחק מצטבר, כך שקיצור דרך או נסיעה אחורה לא סופרים הקפה */
@@ -18,16 +17,9 @@ export class Race {
     const n = this.track.count;
     for (const car of this.cars) {
       if (car.finished) continue;
-      const lap = Math.floor(car.distance / n);
-      if (lap > car.lapTimes.length && lap >= 1) {
-        car.lapTimes.push(this.time - car.lapStart);
-        car.lapStart = this.time;
-        car.justLapped = true;
-      }
       if (car.distance >= n * LAPS) {
         car.finished = true;
         car.finishTime = this.time;
-        this.finishOrder.push(car);
       }
     }
   }
@@ -49,10 +41,6 @@ export class Race {
   progress(car) {
     if (car.finished) return 1;
     return Math.min(1, Math.max(0, car.distance / (this.track.count * LAPS)));
-  }
-
-  currentLap(car) {
-    return Math.min(LAPS, Math.max(1, Math.floor(car.distance / this.track.count) + 1));
   }
 
   /* זמן משוער למי שעוד לא סיים: לפי הקצב הממוצע שלו עד עכשיו */

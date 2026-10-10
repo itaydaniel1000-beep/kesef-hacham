@@ -30,13 +30,31 @@ const gradient = (() => {
 
 const cache = new Map();
 
+/* משאבים משותפים (חומרים מהמטמון, גאומטריות של מודול) מסומנים, כדי ששחרור לא ימחק אותם */
+export function shared(resource) {
+  resource.userData.shared = true;
+  return resource;
+}
+
+/* משחרר מהזיכרון של הכרטיס הגרפי כל מה שנבנה במיוחד עבור העצם הזה — ולא נוגע במשותף */
+export function disposeTree(root) {
+  root.traverse((o) => {
+    if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) {
+      if (m.userData.shared) continue;
+      m.map?.dispose();
+      m.dispose();
+    }
+  });
+}
+
 export function toon(color, extra = {}) {
   const key = color + JSON.stringify(extra);
-  if (!cache.has(key)) cache.set(key, new THREE.MeshToonMaterial({ color, gradientMap: gradient, ...extra }));
+  if (!cache.has(key)) cache.set(key, shared(new THREE.MeshToonMaterial({ color, gradientMap: gradient, ...extra })));
   return cache.get(key);
 }
 
-const outlineMaterial = new THREE.MeshBasicMaterial({ color: PALETTE.ink, side: THREE.BackSide });
+const outlineMaterial = shared(new THREE.MeshBasicMaterial({ color: PALETTE.ink, side: THREE.BackSide }));
 
 /* רשת עם קו מתאר: עותק הפוך ומוגדל קצת, בצבע הדיו */
 export function outlined(geometry, color, thickness = 0.07) {

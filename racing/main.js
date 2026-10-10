@@ -68,7 +68,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color();
 scene.fog = new THREE.Fog(0xffffff, 140, 330);
 
-const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 900);
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0x7fae6f, 1.1);
 scene.add(hemi);

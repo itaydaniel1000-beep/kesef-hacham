@@ -6,6 +6,8 @@ import { buildScenery } from "./scenery.js";
 
 export const ROAD_HALF = 7;               // חצי רוחב הכביש
 export const WALL_OFFSET = ROAD_HALF + 7; // איפה עומד הקיר מהמרכז
+/* שכבות הכביש מונחות זו מעל זו עם רווח, כדי שלא יהבהבו זו דרך זו מרחוק. זה גובה פני האספלט */
+export const ROAD_TOP = 0.14;
 const SAMPLES = 900;
 const EMBANK_SLOPE = 1.6;                 // כמה רחוק יוצאת הסוללה לכל יחידת גובה
 
@@ -19,14 +21,16 @@ export class Track {
       "centripetal"
     );
     this.count = SAMPLES;
-    this.points = curve.getSpacedPoints(SAMPLES).slice(0, SAMPLES);
     this.length = curve.getLength();
     this.spacing = this.length / SAMPLES;
+    this.points = curve.getSpacedPoints(SAMPLES).slice(0, SAMPLES);
+    /* העקומה החלקה לפעמים צוללת מעט מתחת לאפס בין גבעות — אז הקרקע מכסה את הכביש. לא נותנים לה לרדת */
+    for (const p of this.points) p.y = Math.max(0, p.y);
 
-    const full = this.points.map((_, i) => curve.getTangentAt(i / SAMPLES));
-    this.tangents = full.map((t) => t.clone().setY(0).normalize());
-    /* שיפוע: כמה עולים לכל יחידה אופקית */
-    this.slopes = full.map((t) => t.y / Math.max(0.001, Math.hypot(t.x, t.z)));
+    this.tangents = this.points.map((_, i) => curve.getTangentAt(i / SAMPLES).setY(0).normalize());
+    /* שיפוע: כמה עולים לכל יחידה אופקית — מהגבהים אחרי התיקון, לא מהעקומה המקורית */
+    this.slopes = this.points.map((_, i) =>
+      (this.points[this.wrap(i + 1)].y - this.points[this.wrap(i - 1)].y) / (2 * this.spacing));
     /* שמאל ביחס לכיוון הנסיעה */
     this.lefts = this.tangents.map((t) => new THREE.Vector3(t.z, 0, -t.x));
     this.headings = this.tangents.map((t) => Math.atan2(t.x, t.z));
@@ -122,7 +126,7 @@ export class Track {
   buildGround() {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), toon(this.theme.ground));
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(160, -0.05, 40);
+    ground.position.set(160, -0.15, 40);
     ground.receiveShadow = true;
     this.group.add(ground);
   }
@@ -160,16 +164,16 @@ export class Track {
     const th = this.theme;
     const stripe = (a, b) => (i) => (Math.floor(i / 6) % 2 ? a : b);
     /* השוליים בין הכביש לקיר, בגובה הכביש */
-    this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.0, () => th.embank, { step: 2 });
+    this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.02, () => th.embank, { step: 2 });
     /* פס דיו סביב הכביש — אותו קו מתאר כמו בשאר העולם */
-    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.02, () => PALETTE.ink);
-    this.ribbon(-ROAD_HALF, ROAD_HALF, 0.04, () => PALETTE.road);
-    this.ribbon(ROAD_HALF - 0.05, ROAD_HALF + 1.4, 0.05, stripe(th.curbA, th.curbB));
-    this.ribbon(-ROAD_HALF - 1.4, -ROAD_HALF + 0.05, 0.05, stripe(th.curbA, th.curbB));
+    this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.08, () => PALETTE.ink);
+    this.ribbon(-ROAD_HALF, ROAD_HALF, ROAD_TOP, () => PALETTE.road);
+    this.ribbon(ROAD_HALF - 0.05, ROAD_HALF + 1.4, 0.16, stripe(th.curbA, th.curbB));
+    this.ribbon(-ROAD_HALF - 1.4, -ROAD_HALF + 0.05, 0.16, stripe(th.curbA, th.curbB));
 
     /* משטחי קרח: תכלת שקוף על הכביש */
     for (const [a, b] of this.def.ice) {
-      this.ribbon(-ROAD_HALF, ROAD_HALF, 0.06, (i) => (Math.floor(i / 3) % 2 ? 0xbfe6ff : 0xe3f5ff),
+      this.ribbon(-ROAD_HALF, ROAD_HALF, 0.18, (i) => (Math.floor(i / 3) % 2 ? 0xbfe6ff : 0xe3f5ff),
         { from: Math.floor(a * this.count), to: Math.floor(b * this.count), opacity: 0.85 });
     }
 
@@ -179,7 +183,7 @@ export class Track {
     let n = 0;
     for (let i = 0; i < this.count; i += 8) {
       if (this.isIce[i]) continue;
-      dashes.setMatrixAt(n++, this.surfaceMatrix(i, 0, 0.07));
+      dashes.setMatrixAt(n++, this.surfaceMatrix(i, 0, 0.2));
     }
     dashes.count = n;
     dashes.receiveShadow = true;
@@ -327,7 +331,7 @@ export class Track {
     for (const pad of this.boosts) {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.matrixAutoUpdate = false;
-      mesh.matrix.copy(this.surfaceMatrix(pad.index, pad.lateral, 0.09));
+      mesh.matrix.copy(this.surfaceMatrix(pad.index, pad.lateral, 0.22));
       this.group.add(mesh);
     }
   }
@@ -348,7 +352,7 @@ export class Track {
     tex.magFilter = THREE.NearestFilter;
     const line = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, 1.8), new THREE.MeshBasicMaterial({ map: tex }));
     line.matrixAutoUpdate = false;
-    line.matrix.copy(this.surfaceMatrix(0, 0, 0.08));
+    line.matrix.copy(this.surfaceMatrix(0, 0, 0.21));
     this.group.add(line);
 
     /* קשת קו הסיום */

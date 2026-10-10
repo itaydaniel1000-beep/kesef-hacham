@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { PALETTE, toon, outlined } from "./toon.js";
-import { ROAD_HALF, WALL_OFFSET } from "./track.js";
+import { ROAD_HALF, WALL_OFFSET, ROAD_TOP } from "./track.js";
 
 export const CAR_RADIUS = 1.7;
 const GRAVITY = 26;
@@ -343,7 +343,7 @@ export class Car {
   }
 
   syncMesh(dt, track) {
-    this.mesh.position.set(this.x, this.y, this.z);
+    this.mesh.position.set(this.x, this.y + ROAD_TOP, this.z);
     this.mesh.rotation.y = this.heading;
     /* נטייה קדימה/אחורה לפי שיפוע הכביש; באוויר האף צונח לאט */
     const slope = track ? track.slopes[this.trackIndex] : 0;

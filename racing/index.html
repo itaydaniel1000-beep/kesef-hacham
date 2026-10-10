@@ -66,6 +66,7 @@
   <!-- ===== מוסך: בחירת מסלול, מכונית, צבע וקושי ===== -->
   <div id="menu" class="overlay">
     <div class="card card-wide">
+      <button id="mpButton" class="mp-button" type="button">מולטיפלייר</button>
       <div class="title-row">
         <div class="badge">🏁</div>
         <div>
@@ -106,6 +107,43 @@
 
       <button id="startButton" class="primary-button">יוצאים למירוץ</button>
       <p class="credits">מכוניות ונוף: נוצרו ב-Meshy AI · דשא: ambientCG (CC0) · תאורת שמיים: Poly Haven (CC0)</p>
+    </div>
+  </div>
+
+  <!-- ===== מולטיפלייר: הצטרפות / יצירת חדר, ואז לובי ===== -->
+  <div id="mp" class="overlay hidden">
+    <div class="card card-wide">
+      <h1>מולטיפלייר</h1>
+      <div id="mpStart">
+        <label class="mp-field">השם שלך
+          <input id="mpName" maxlength="14" autocomplete="nickname" placeholder="למשל: שי">
+        </label>
+        <div class="mp-options">
+          <div class="mp-option">
+            <h2>הצטרפות לחדר</h2>
+            <input id="mpCode" class="mp-code-input" maxlength="5" placeholder="קוד חדר" autocomplete="off" spellcheck="false">
+            <button id="mpJoin" class="primary-button" type="button">הצטרפות</button>
+          </div>
+          <div class="mp-option">
+            <h2>חדר חדש</h2>
+            <p class="lead">תקבלו קוד לשלוח לחברים</p>
+            <button id="mpCreate" class="primary-button" type="button">יצירת חדר</button>
+          </div>
+        </div>
+      </div>
+      <div id="mpLobby" class="hidden">
+        <p class="lead">קוד החדר — שלחו אותו לחברים:</p>
+        <div id="mpRoomCode" class="room-code"></div>
+        <p id="mpTrack" class="lead"></p>
+        <div id="mpTrackPicker" class="segmented mp-tracks"></div>
+        <h2>שחקנים בחדר</h2>
+        <ol id="mpPlayers" class="results"></ol>
+        <label id="mpBotsRow" class="mp-check"><input type="checkbox" id="mpBots" checked> להשלים את המקומות הריקים בבוטים</label>
+        <button id="mpGo" class="primary-button" type="button">התחלת המשחק</button>
+        <p id="mpWait" class="lead hidden">מחכים שהמארח יתחיל את המשחק…</p>
+      </div>
+      <p id="mpError" class="mp-error"></p>
+      <button id="mpBack" class="secondary-button" type="button">חזרה למוסך</button>
     </div>
   </div>
 

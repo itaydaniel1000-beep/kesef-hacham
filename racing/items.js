@@ -61,6 +61,8 @@ export class ItemSystem {
     this.mines = [];
     this.time = 0;
     this.fx = () => {}; // main.js מחבר לכאן קול וחלקיקים
+    this.net = null;    // מולטיפלייר: main.js מחבר לכאן שליחת אירועים (קופסה, מוקש, פגיעה)
+    this.mineCounter = 0;
 
     /* שורות של שלוש קופסאות לרוחב הכביש, מפוזרות לאורך המסלול (לא על הזינוק, לא על משטחי האצה או קרח) */
     const rows = 8;
@@ -118,6 +120,7 @@ export class ItemSystem {
     if (!racing) return;
 
     for (const car of cars) {
+      if (car.remote) continue; // מכוניות של שחקנים אחרים: האיסוף והפגיעות נבדקים אצלם
       this.record(car, dt);
       if (car.item) car.itemAge += dt;
       if (car.finished) continue;
@@ -126,8 +129,8 @@ export class ItemSystem {
         if (!b.mesh.visible) continue;
         const dx = car.x - b.mesh.position.x, dz = car.z - b.mesh.position.z;
         if (dx * dx + dz * dz > BOX_HIT * BOX_HIT || Math.abs(car.y + 1 - b.mesh.position.y) > 3) continue;
-        b.mesh.visible = false;
-        b.respawn = RESPAWN;
+        this.hideBox(this.boxes.indexOf(b));
+        this.net?.box(this.boxes.indexOf(b));
         if (!car.item) {
           const kinds = Object.keys(ITEMS);
           car.item = kinds[Math.floor(Math.random() * kinds.length)];
@@ -149,6 +152,7 @@ export class ItemSystem {
         }
         if (dx * dx + dz * dz > MINE_HIT * MINE_HIT || Math.abs(car.y - m.mesh.position.y) > 2) continue;
         m.hit = true;
+        this.net?.mineHit(m.id);
         this.fx("boom", car, m.mesh.position);
         this.rewind(car);
       }
@@ -184,6 +188,35 @@ export class ItemSystem {
     car.history.length = 0; // שלא יחזור לנקודה שבה עלה על המוקש
   }
 
+  hideBox(i) {
+    const b = this.boxes[i];
+    if (!b) return;
+    b.mesh.visible = false;
+    b.respawn = RESPAWN;
+  }
+
+  addMine(x, y, z, owner, id) {
+    const mesh = new THREE.Mesh(mineGeo, mineMat);
+    mesh.position.set(x, y + 0.55, z);
+    mesh.castShadow = true;
+    const light = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
+    light.position.y = 0.5;
+    mesh.add(light);
+    this.group.add(mesh);
+    const mine = { id, mesh, light, owner, ownerClear: false, hit: false };
+    this.mines.push(mine);
+    if (this.mines.length > 24) this.group.remove(this.mines.shift().mesh);
+    return mine;
+  }
+
+  /* מוקש שמישהו אחר פגע בו (הודעה מהרשת) */
+  removeMine(id) {
+    const m = this.mines.find((mm) => mm.id === id);
+    if (!m) return;
+    this.group.remove(m.mesh);
+    this.mines = this.mines.filter((mm) => mm !== m);
+  }
+
   /* הפעלת הפריט (מקש ק) */
   use(car) {
     if (!car.item || car.finished) return false;
@@ -197,15 +230,8 @@ export class ItemSystem {
       const bx = car.x - Math.sin(car.moveHeading) * MINE_BEHIND * dir;
       const bz = car.z - Math.cos(car.moveHeading) * MINE_BEHIND * dir;
       const groundY = car.groundHeight ?? car.y; // הקרקע מתחת למכונית (גם כשהיא באוויר)
-      const mesh = new THREE.Mesh(mineGeo, mineMat);
-      mesh.position.set(bx, groundY + 0.55, bz);
-      mesh.castShadow = true;
-      const light = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
-      light.position.y = 0.5;
-      mesh.add(light);
-      this.group.add(mesh);
-      this.mines.push({ mesh, light, owner: car, ownerClear: false, hit: false });
-      if (this.mines.length > 24) this.group.remove(this.mines.shift().mesh);
+      const mine = this.addMine(bx, groundY, bz, car, `${car.netId || "local"}-${++this.mineCounter}`);
+      this.net?.mine(mine.id, bx, groundY, bz, car.netId);
       this.fx("mine", car);
     } else if (kind === "warp") {
       this.warp(car);

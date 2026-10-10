@@ -241,6 +241,7 @@ export class Car {
     this.itemAge = 0;
     this.history = [];
     this.historyTimer = 0;
+    this.net = null;         // מולטיפלייר: המצב האחרון שהגיע מהרשת
   }
 
   buildMesh(s) {
@@ -607,6 +608,45 @@ export class Car {
         return;
       }
     }
+  }
+
+  /* ===== מולטיפלייר: מצב המכונית לשליחה, והחלה של מצב שהגיע מהרשת על מכונית "מרוחקת" ===== */
+  netState() {
+    const r = (v, k = 100) => Math.round(v * k) / k;
+    return [r(this.x), r(this.y), r(this.z), r(this.heading, 1000), r(this.moveHeading, 1000), r(this.speed), r(this.distance),
+      this.trackIndex, r(this.lateral), this.finished ? 1 : 0, r(this.finishTime), r(this.steer), this.nitroOn ? 1 : 0,
+      r(this.padBoost), this.drifting ? 1 : 0, r(this.groundHeight ?? this.y)];
+  }
+
+  netApply(s) {
+    const [x, y, z, heading, moveHeading, speed, distance, trackIndex, lateral, finished, finishTime, steer, nitroOn, padBoost, drifting, ground] = s;
+    const first = !this.net;
+    this.net = { x, y, z, heading, moveHeading, speed, at: performance.now() };
+    /* קפיצה גדולה (שיגור, מוקש, התחלה) — בלי החלקה */
+    if (first || Math.hypot(x - this.x, z - this.z) > 25) Object.assign(this, { x, y, z, heading, moveHeading });
+    Object.assign(this, { speed, distance, trackIndex, lateral, steer, padBoost, groundHeight: ground });
+    this.nitroOn = !!nitroOn;
+    this.drifting = !!drifting;
+    if (finished && !this.finished) {
+      this.finished = true;
+      this.finishTime = finishTime;
+    }
+  }
+
+  /* בין עדכון לעדכון ממשיכים את התנועה לפי המהירות, ומחליקים אל המקום המשוער */
+  netStep(dt) {
+    const n = this.net;
+    if (!n) return;
+    const age = Math.min(0.4, (performance.now() - n.at) / 1000);
+    const px = n.x + Math.sin(n.moveHeading) * n.speed * age;
+    const pz = n.z + Math.cos(n.moveHeading) * n.speed * age;
+    const k = Math.min(1, dt * 12);
+    this.x += (px - this.x) * k;
+    this.z += (pz - this.z) * k;
+    this.y += (n.y - this.y) * k;
+    this.heading += angleDiff(n.heading, this.heading) * k;
+    this.moveHeading += angleDiff(n.moveHeading, this.moveHeading) * k;
+    this.grounded = Math.abs(this.y - (this.groundHeight ?? this.y)) < 0.3;
   }
 
   syncMesh(dt, track) {

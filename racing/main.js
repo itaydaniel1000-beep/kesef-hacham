@@ -8,6 +8,7 @@ import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
 import { ItemSystem, ITEMS } from "./items.js";
+import { Room } from "./net.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -186,11 +187,13 @@ let cars = [];
 let autopilot = null;
 let cooldownDriver = null;
 
-function buildCars() {
+function buildCars(roster = null) {
   for (const car of cars) {
     scene.remove(car.mesh);
     car.dispose();
   }
+  netCars.clear();
+  if (roster) return buildRosterCars(roster);
   const level = LEVELS[settings.level];
   const mine = COLORS.find((c) => c.color === settings.color);
   player = new Car({ name: "אני", color: mine.color, type: settings.type, detail: 1e6 });
@@ -221,7 +224,7 @@ function buildCars() {
 function gridUp() {
   cars.forEach((car, i) => {
     const row = Math.floor(i / 3), col = (i % 3) - 1;
-    const back = Math.round(-(4 + row * 7.5 + (col === 0 ? 1.5 : 0) + (car === player ? 3 : 0)) / track.spacing);
+    const back = Math.round(-(4 + row * 7.5 + (col === 0 ? 1.5 : 0) + (car === player && !mpRoster ? 3 : 0)) / track.spacing);
     car.placeAt(track, track.wrap(back), col * 4.6);
   });
   particles.clear();
@@ -390,6 +393,8 @@ function startRace() {
   }
   race = new Race(track, cars, player);
   items.reset(cars);
+  items.net = mpRoster ? itemNet : null;
+  netTimer = 0;
   state = "countdown";
   countdown = 3.999;
   resultsShownAt = 0;
@@ -399,7 +404,7 @@ function startRace() {
   show("results", false);
   show("pause", false);
   show("hud", true);
-  show("pauseButton", true);
+  show("pauseButton", !mpRoster);
   show("touch", isTouch);
   show("countdown", true);
   audio.start();
@@ -430,6 +435,7 @@ function toGarage() {
 const RACING = ["countdown", "race", "finished"];
 function pause() {
   if (!RACING.includes(state)) return;
+  if (mpRoster) return; // במולטיפלייר העולם לא עוצר בשבילך
   if (state === "finished" && !resultsShownAt) return; // מסך התוצאות כבר פתוח
   pausedFrom = state;
   state = "paused";
@@ -461,8 +467,11 @@ function resume() {
 }
 
 $("startButton").addEventListener("click", startRace);
-$("againButton").addEventListener("click", startRace);
-$("garageButton").addEventListener("click", toGarage);
+$("againButton").addEventListener("click", () => (mpRoster ? backToRoom(true) : startRace()));
+$("garageButton").addEventListener("click", () => {
+  if (room) leaveRoom();
+  toGarage();
+});
 $("pauseButton").addEventListener("click", pause);
 /* כפתורי הפינה לא שומרים פוקוס — אחרת רווח (דריפט) היה לוחץ עליהם שוב */
 for (const id of ["pauseButton", "muteButton", "musicButton"]) $(id).addEventListener("click", (e) => e.currentTarget.blur());
@@ -479,7 +488,7 @@ addEventListener("keydown", (e) => {
   /* Enter מתחיל מירוץ, גם כשכפתור במוסך בפוקוס — ובלי ש"ילחץ" על הכפתור הזה */
   /* על "למוסך" או על "איך נוהגים?" Enter עושה את מה שהם עושים — לא מתחיל מירוץ */
   if (e.target instanceof Element && e.target.closest("#garageButton, summary")) return;
-  if (e.code === "Enter" && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
+  if (e.code === "Enter" && !mpRoster && $("mp").classList.contains("hidden") && !$("startButton").disabled && (state === "menu" || (state === "finished" && !resultsShownAt))) {
     e.preventDefault();
     startRace();
   }
@@ -569,6 +578,7 @@ function updateHud() {
 
 function showResults() {
   show("pauseButton", false); // אין מה להשהות במסך הסיום
+  $("againButton").textContent = mpRoster ? "חזרה לחדר" : "עוד מירוץ";
   const place = race.placeOf(player);
   const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
   $("resultTitle").textContent = titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
@@ -850,8 +860,12 @@ function step(dt) {
     d.update(dt, track, boost, cars);
     items.think(d.car, d, cars);
   }
-  for (const car of cars) car.update(dt, track, cars);
+  for (const car of cars) {
+    if (car.remote) car.netStep(dt); // חבר אמיתי: זז לפי מה שמגיע מהרשת
+    else car.update(dt, track, cars);
+  }
   resolveCollisions(cars);
+  if (mpRoster) netTick(dt);
   items.update(dt, cars, true);
   race.update(dt);
 
@@ -900,6 +914,313 @@ function frame(now) {
     if (state === "paused") lastPausedDraw = now;
   }
   requestAnimationFrame(frame);
+}
+
+
+/* ===================================================================
+   מולטיפלייר: חדר עם קוד. מי שיוצר את החדר (המארח) מריץ את הבוטים ומעביר לכולם את המיקומים.
+   אצל כל שחקן, החברים הם מכוניות שזזות בדיוק כמו המכונית האמיתית שלהם.
+   =================================================================== */
+
+const MAX_CARS = RIVALS + 1;
+const NET_RATE = 1 / 15;   // 15 עדכוני מיקום בשנייה
+let room = null;
+let mpRoster = null;       // במירוץ מולטיפלייר: מי נוהג באיזו מכונית
+let lobby = { players: [], track: settings.track, bots: true };
+const netCars = new Map(); // מזהה שחקן -> המכונית שלו אצלי
+const latestStates = new Map(); // אצל המארח: המצב האחרון של כל אורח
+let netTimer = 0;
+
+const mpName = () => ($("mpName").value.trim() || "שחקן").slice(0, 14);
+function mpError(text) {
+  $("mpError").textContent = text || "";
+}
+
+function netSend(msg) {
+  if (!room) return;
+  if (room.isHost) room.broadcast(msg);
+  else room.send(msg);
+}
+
+/* אירועי הפריטים: קופסה נלקחה, מוקש הונח, מישהו עלה על מוקש */
+const itemNet = {
+  box: (i) => netSend({ t: "box", i }),
+  mine: (id, x, y, z, owner) => netSend({ t: "mine", id, x, y, z, owner }),
+  mineHit: (id) => netSend({ t: "mineHit", id })
+};
+function applyItemEvent(msg) {
+  if (!items) return;
+  if (msg.t === "box") items.hideBox(msg.i);
+  else if (msg.t === "mine") items.addMine(msg.x, msg.y, msg.z, cars.find((c) => c.netId === msg.owner) || null, msg.id);
+  else if (msg.t === "mineHit") items.removeMine(msg.id);
+}
+
+/* המכוניות לפי רשימת החדר: אני נוהג בשלי, המארח מריץ את הבוטים, וכל השאר מגיעים מהרשת */
+function buildRosterCars(roster) {
+  const level = LEVELS[settings.level];
+  cars = [];
+  rivals = [];
+  drivers = [];
+  roster.forEach((e, i) => {
+    const mine = e.id === room.myId;
+    const car = new Car({ name: e.name, color: e.color, type: e.type, detail: mine ? 1e6 : coarse ? 18 : 45 });
+    car.netId = e.id;
+    if (mine) {
+      player = car;
+      player.brakeDrifts = true;
+    } else if (e.bot && room.isHost) {
+      rivals.push(car);
+      drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.005 }));
+    } else {
+      car.remote = true;
+      rivals.push(car);
+      netCars.set(e.id, car);
+    }
+    cars.push(car);
+  });
+  autopilot = null;
+  cooldownDriver = new Driver(player);
+  for (const car of cars) scene.add(car.mesh);
+  gridUp();
+}
+
+/* שליחת מיקומים: אורח שולח את שלו למארח; המארח שולח לכולם את כל המכוניות */
+function netTick(dt) {
+  netTimer += dt;
+  if (netTimer < NET_RATE) return;
+  netTimer = 0;
+  if (room.isHost) {
+    const list = [[player.netId, player.netState()]];
+    for (const d of drivers) list.push([d.car.netId, d.car.netState()]);
+    for (const [id, st] of latestStates) list.push([id, st]);
+    room.broadcast({ t: "states", list });
+  } else {
+    room.send({ t: "state", s: player.netState() });
+  }
+}
+
+function onNetMessage(msg, from) {
+  if (room.isHost) {
+    if (msg.t === "hello") {
+      if (!lobby.players.some((p) => p.id === from) && lobby.players.length < MAX_CARS) {
+        /* צבע שכבר תפוס בחדר מוחלף בצבע פנוי — שלא יהיו שתי מכוניות זהות */
+        const taken = new Set(lobby.players.map((p) => p.color));
+        const color = taken.has(msg.color) || !COLORS.some((c) => c.color === msg.color) ? (COLORS.find((c) => !taken.has(c.color)) || COLORS[0]).color : msg.color;
+        lobby.players.push({ id: from, name: String(msg.name || "שחקן").slice(0, 14), color, type: CAR_TYPES[msg.type] ? msg.type : "grip" });
+      }
+      sendLobby();
+    } else if (msg.t === "state") {
+      latestStates.set(from, msg.s);
+      netCars.get(from)?.netApply(msg.s);
+    } else if (["box", "mine", "mineHit"].includes(msg.t)) {
+      applyItemEvent(msg);
+      room.broadcast(msg, from);
+    }
+    return;
+  }
+  if (msg.t === "lobby") {
+    lobby = msg.lobby;
+    if (!mpRoster) renderLobby();
+  } else if (msg.t === "start") {
+    startMultiplayer(msg);
+  } else if (msg.t === "states") {
+    for (const [id, st] of msg.list) if (id !== room.myId) netCars.get(id)?.netApply(st);
+  } else if (["box", "mine", "mineHit"].includes(msg.t)) {
+    applyItemEvent(msg);
+  } else if (msg.t === "toLobby") {
+    backToRoom(false);
+  }
+}
+
+function sendLobby() {
+  room.broadcast({ t: "lobby", lobby });
+  renderLobby();
+}
+
+function renderLobby() {
+  show("mpStart", false);
+  show("mpLobby", true);
+  $("mpRoomCode").textContent = room.code;
+  const def = TRACKS.find((t) => t.id === lobby.track) || TRACKS[0];
+  $("mpTrack").textContent = `מסלול: ${def.emoji} ${def.name}`;
+  const list = $("mpPlayers");
+  list.innerHTML = "";
+  lobby.players.forEach((p, i) => {
+    const li = el("li", p.id === room.myId ? "me" : null);
+    li.append(el("span", "pos", String(i + 1)));
+    const sw = el("span", "swatch");
+    sw.style.background = hex(p.color);
+    li.append(sw, el("span", "name", p.name));
+    if (p.id === "host") li.querySelector(".name").append(el("span", "tag", "(מארח)"));
+    list.append(li);
+  });
+  const empty = MAX_CARS - lobby.players.length;
+  if (empty > 0) list.append(el("li", null, `<span class="name">${lobby.bots ? `+ ${empty} בוטים` : `${empty} מקומות ריקים`}</span>`));
+  /* רק המארח בוחר מסלול, בוטים ומתי מתחילים */
+  show("mpTrackPicker", room.isHost);
+  show("mpBotsRow", room.isHost);
+  show("mpGo", room.isHost);
+  show("mpWait", !room.isHost);
+  $("mpBots").checked = lobby.bots;
+  markSelected($("mpTrackPicker"), (b) => b.dataset.id === lobby.track);
+}
+
+function openMultiplayer() {
+  mpError("");
+  try {
+    $("mpName").value ||= localStorage.getItem("racing-name") || "";
+  } catch {
+    /* בלי שמירה */
+  }
+  show("mpStart", !room);
+  show("mpLobby", !!room);
+  if (room) renderLobby();
+  show("menu", false);
+  show("mp", true);
+}
+
+function saveName() {
+  try {
+    localStorage.setItem("racing-name", mpName());
+  } catch {
+    /* בלי שמירה */
+  }
+}
+
+function attachRoom(r) {
+  room = r;
+  room.on("message", onNetMessage);
+  room.on("left", (id) => {
+    lobby.players = lobby.players.filter((p) => p.id !== id);
+    latestStates.delete(id);
+    sendLobby();
+  });
+  room.on("hostLeft", () => {
+    leaveRoom();
+    toGarage();
+    show("menu", false);
+    show("mp", true);
+    show("mpStart", true);
+    show("mpLobby", false);
+    mpError("המארח יצא מהחדר");
+  });
+}
+
+async function createRoom() {
+  mpError("");
+  saveName();
+  $("mpCreate").disabled = true;
+  try {
+    const r = new Room();
+    await r.create();
+    attachRoom(r);
+    lobby = { players: [{ id: "host", name: mpName(), color: settings.color, type: settings.type }], track: settings.track, bots: true };
+    sendLobby();
+  } catch (e) {
+    mpError(e.message);
+  } finally {
+    $("mpCreate").disabled = false;
+  }
+}
+
+async function joinRoom() {
+  mpError("");
+  const code = $("mpCode").value.trim().toUpperCase();
+  if (code.length < 5) return mpError("הקוד הוא 5 תווים");
+  saveName();
+  $("mpJoin").disabled = true;
+  try {
+    const r = new Room();
+    await r.join(code);
+    attachRoom(r);
+    lobby = { players: [], track: settings.track, bots: true };
+    renderLobby();
+    room.send({ t: "hello", name: mpName(), color: settings.color, type: settings.type });
+  } catch (e) {
+    mpError(e.message);
+  } finally {
+    $("mpJoin").disabled = false;
+  }
+}
+
+function leaveRoom() {
+  room?.leave();
+  room = null;
+  latestStates.clear();
+  if (mpRoster) {
+    mpRoster = null;
+    buildCars(); // חוזרים למכוניות של משחק רגיל
+  }
+}
+
+/* המארח לוחץ "התחלת המשחק": רשימת המכוניות (שחקנים + בוטים) נשלחת לכולם */
+function hostStart() {
+  const humans = lobby.players.map((p) => ({ ...p, bot: false }));
+  const roster = [...humans];
+  if (lobby.bots) {
+    const used = new Set(humans.map((p) => p.color));
+    const free = COLORS.filter((c) => !used.has(c.color));
+    const types = Object.keys(CAR_TYPES);
+    for (let i = 0; roster.length < MAX_CARS; i++) {
+      const c = free[i % free.length] || COLORS[i % COLORS.length];
+      roster.push({ id: `bot${i}`, name: c.name, color: c.color, type: types[Math.floor(Math.random() * types.length)], bot: true });
+    }
+  }
+  /* השחקנים בהתחלה מפוזרים בין הבוטים — כולם מתחילים מאחור, כמו במשחק רגיל */
+  roster.reverse();
+  const msg = { t: "start", track: lobby.track, level: settings.level, roster };
+  room.broadcast(msg);
+  startMultiplayer(msg);
+}
+
+function startMultiplayer(msg) {
+  mpRoster = msg.roster;
+  latestStates.clear();
+  settings.track = currentTrackId = msg.track;
+  useTrack(msg.track);
+  buildCars(msg.roster);
+  show("mp", false);
+  startRace();
+}
+
+/* אחרי המירוץ: חוזרים ללובי של החדר (המארח מחזיר את כולם) */
+function backToRoom(fromHere) {
+  if (fromHere && room?.isHost) room.broadcast({ t: "toLobby" });
+  if (!room) return toGarage();
+  mpRoster = null;
+  buildCars();
+  toGarage();
+  openMultiplayer();
+}
+
+$("mpButton").addEventListener("click", openMultiplayer);
+$("mpCreate").addEventListener("click", createRoom);
+$("mpJoin").addEventListener("click", joinRoom);
+$("mpCode").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") joinRoom();
+});
+$("mpBack").addEventListener("click", () => {
+  if (room) leaveRoom();
+  show("mp", false);
+  show("menu", true);
+});
+$("mpGo").addEventListener("click", hostStart);
+$("mpBots").addEventListener("change", (e) => {
+  lobby.bots = e.target.checked;
+  sendLobby();
+});
+for (const def of TRACKS) {
+  const btn = el("button", null, `${def.emoji} ${def.name}`);
+  btn.type = "button";
+  btn.dataset.id = def.id;
+  btn.addEventListener("click", () => {
+    lobby.track = def.id;
+    settings.track = currentTrackId = def.id;
+    useTrack(def.id);
+    gridUp();
+    sendLobby();
+  });
+  $("mpTrackPicker").append(btn);
 }
 
 /* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */

@@ -1,0 +1,15 @@
+# האתר בלי שלב בנייה: מגישים את התיקייה כמו שהיא
+[build]
+  publish = "."
+
+# קוד ועיצוב: הדפדפן בודק בכל כניסה אם יש גרסה חדשה (בלי זה עלולים לראות גרסה ישנה)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# המודל, התאורה והטקסטורות כבדים ולא משתנים — נשמרים במטמון ליום
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"

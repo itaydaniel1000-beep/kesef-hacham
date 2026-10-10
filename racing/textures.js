@@ -163,17 +163,20 @@ export function normalFrom(tex, strength = 2) {
 }
 const linear = (t) => ((t.colorSpace = THREE.NoColorSpace), t);
 
-/* דשא מצולם (opengameart, CC-BY 3.0) — נטען ברקע ומחליף את הדשא המחושב כשהוא מוכן */
-export function photoGrass(onReady) {
+/* דשא מצולם (ambientCG, CC0): צבע, נורמלים וחספוס — נטען ברקע ומחליף את הדשא המחושב כשהוא מוכן.
+   repeat = כמה פעמים הטקסטורה חוזרת על כל יחידת UV (הטקסטורה מכסה כ-5 יחידות של העולם) */
+export function photoGrass(repeat, onReady) {
   const loader = new THREE.TextureLoader();
-  Promise.all([loader.loadAsync("assets/grasslight-big.jpg"), loader.loadAsync("assets/grasslight-big-nm.jpg")])
-    .then(([map, normal]) => {
+  const files = ["assets/grass/grass_color.jpg", "assets/grass/grass_normal.jpg", "assets/grass/grass_rough.jpg"];
+  Promise.all(files.map((f) => loader.loadAsync(f)))
+    .then(([map, normal, rough]) => {
       map.colorSpace = THREE.SRGBColorSpace;
-      for (const t of [map, normal]) {
+      for (const t of [map, normal, rough]) {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = 8;
+        t.repeat.set(repeat, repeat);
       }
-      onReady(map, normal);
+      onReady(map, normal, rough);
     })
     .catch(() => {});
 }

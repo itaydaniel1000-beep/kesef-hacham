@@ -9,6 +9,7 @@ export const ROAD_HALF = 7;               // חצי רוחב הכביש
 export const WALL_OFFSET = ROAD_HALF + 7; // איפה עומד הקיר מהמרכז
 /* שכבות הכביש מונחות זו מעל זו עם רווח, כדי שלא יהבהבו זו דרך זו מרחוק. זה גובה פני האספלט */
 export const ROAD_TOP = 0.14;
+const GRASS_TILE = 5; // כמה יחידות של העולם מכסה אריח אחד של הדשא המצולם
 
 /* ההפרש בין שתי זוויות, בין ‎-π ל-π */
 export const angleDiff = (a, b) => {
@@ -156,9 +157,8 @@ export class Track {
     const material = new THREE.MeshStandardMaterial({ map: tex, normalMap: normal, roughness: 0.95 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);
     if (this.def.scenery === "forest") {
-      photoGrass((map, nm) => {
-        for (const t of [map, nm]) t.repeat.setScalar(size / 14);
-        Object.assign(material, { map, normalMap: nm, needsUpdate: true });
+      photoGrass(size / GRASS_TILE, (map, normalMap, roughnessMap) => {
+        Object.assign(material, { map, normalMap, roughnessMap, roughness: 1, needsUpdate: true });
       });
     }
     ground.rotation.x = -Math.PI / 2;
@@ -219,7 +219,10 @@ export class Track {
     /* השוליים בין הכביש לקיר: אותה קרקע כמו מסביב */
     const kind = this.def.scenery;
     const shoulder = new THREE.MeshStandardMaterial({ map: groundTex(kind), normalMap: normalFrom(groundTex(kind), 2), vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 });
-    if (kind === "forest") photoGrass((map, normal) => Object.assign(shoulder, { map, normalMap: normal, needsUpdate: true }));
+    if (kind === "forest") {
+      /* ב-UV של השוליים יחידה אחת = 14 יחידות של העולם */
+      photoGrass(14 / GRASS_TILE, (map, normalMap, roughnessMap) => Object.assign(shoulder, { map, normalMap, roughnessMap, roughness: 1, needsUpdate: true }));
+    }
     this.ribbon(-WALL_OFFSET, WALL_OFFSET, 0.02, () => 0xffffff, { step: 2, material: shoulder, tile: 14, across: (WALL_OFFSET * 2) / 14 });
     /* שולי חצץ כהים מעבר לאבני השפה */
     this.ribbon(-ROAD_HALF - 1.6, ROAD_HALF + 1.6, 0.08, () => 0x55585e, {});

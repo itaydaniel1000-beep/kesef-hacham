@@ -402,10 +402,13 @@ export function resolveCollisions(cars) {
         const avg = (a.speed + b.speed) / 2;
         a.speed = a.speed * 0.6 + avg * 0.4;
         b.speed = b.speed * 0.6 + avg * 0.4;
-        if (rel > 4 && a.bumpCooldown <= 0 && b.bumpCooldown <= 0) {
-          a.events.push("bump");
-          b.events.push("bump");
-          a.bumpCooldown = b.bumpCooldown = 0.3;
+        if (rel > 4) {
+          /* לכל מכונית קירור משלה — מכה בין שני בוטים לא משתיקה את המכה הבאה שלך */
+          for (const c of [a, b]) {
+            if (c.bumpCooldown > 0) continue;
+            c.events.push("bump");
+            c.bumpCooldown = 0.3;
+          }
         }
       }
     }

@@ -392,7 +392,7 @@ function resume() {
   show("pause", false);
   show("touch", isTouch && !player.finished);
   if (state === "countdown" || (state === "race" && countdown > 0.3)) {
-    /* מפעילים מחדש את האנימציה — אחרת המספר נשאר שקוף אחרי שהיא נגמרה */
+    /* מפעילים מחדש את האנימציה, כדי שהמספר "יקפוץ" שוב כשחוזרים מההשהיה */
     const box = $("countdown");
     box.classList.remove("pop");
     void box.offsetWidth;

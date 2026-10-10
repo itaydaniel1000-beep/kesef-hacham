@@ -39,9 +39,9 @@ const RIVALS = 8;
 /* קושי: מהירות היריבים, כמה קרוב לגבול הם נוסעים בפניות (skill),
    וכמה הגומייה עוזרת לך (ahead = כמה מאט מי שבורח, behind = כמה מאיץ מי שמאחור) */
 const LEVELS = {
-  easy: { name: "קל", ai: 0.9, skill: 0.8, ahead: 0.08, behind: 0.02 },
-  normal: { name: "בינוני", ai: 0.98, skill: 0.88, ahead: 0.03, behind: 0.04 },
-  hard: { name: "קשה", ai: 1.02, skill: 0.94, ahead: 0, behind: 0.05 }
+  easy: { name: "קל", ai: 0.96, skill: 0.88, ahead: 0.04, behind: 0.02 },
+  normal: { name: "בינוני", ai: 1.04, skill: 0.94, ahead: 0, behind: 0.05 },
+  hard: { name: "קשה", ai: 1.1, skill: 0.98, ahead: 0, behind: 0.08 }
 };
 
 const settings = { track: "forest", type: "grip", color: PALETTE.brand, level: "normal", muted: false, music: true };
@@ -136,10 +136,10 @@ function buildCars() {
   for (let i = 0; i < RIVALS; i++) {
     const car = new Car({
       name: others[i].name, color: others[i].color, type: types[i % 3],
-      speedScale: (1 - i * 0.008) * level.ai
+      speedScale: (1 - i * 0.004) * level.ai
     });
     rivals.push(car);
-    drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.01 }));
+    drivers.push(new Driver(car, { lane: ((i % 5) - 2) * 0.5, skill: level.skill - (i % 4) * 0.005 }));
   }
   autopilot = AUTOPILOT ? new Driver(player, { skill: 0.88 }) : null;
   /* אחרי קו הסיום המחשב לוקח את ההגה ומאט בעדינות */
@@ -313,6 +313,7 @@ function show(id, on) {
 
 function startRace() {
   gridUp();
+  for (const d of [...drivers, autopilot, cooldownDriver]) d?.prepare(track);
   race = new Race(track, cars, player);
   state = "countdown";
   countdown = 3.999;
@@ -571,6 +572,13 @@ function updateCamera(dt, target, orbit = 0) {
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 4);
     camera.updateProjectionMatrix();
   }
+  /* במסלול ענק מציירים רק את הנוף הקרוב, והשמיים (הרים ועננים) נעים עם המצלמה */
+  if (track.sky) track.sky.position.set(camera.position.x, 0, camera.position.z);
+  if (track.chunks) {
+    for (const c of track.chunks) {
+      c.group.visible = Math.abs(c.x - camera.position.x) < 420 && Math.abs(c.z - camera.position.z) < 420;
+    }
+  }
   /* השמש וצלה עוקבים אחרי המכונית */
   sun.position.set(target.x + 30, target.y + 60, target.z + 20);
   sun.target.position.set(target.x, target.y, target.z);
@@ -679,5 +687,6 @@ window.__race = {
   get cars() { return cars; },
   get track() { return track; },
   audio,
+  renderer,
   start: startRace
 };

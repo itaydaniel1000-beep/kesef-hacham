@@ -28,43 +28,52 @@ export function buildScenery(track) {
   let seed = 7;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const p of track.points) {
-    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-  }
-  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
-  const span = Math.max(maxX - minX, maxZ - minZ);
+  /* הנוף מחולק לאזורים; בכל פריים מציירים רק את האזורים הקרובים למצלמה (ראו main.js) */
+  const CHUNK = 220;
+  const chunks = new Map();
+  const chunkAt = (x, z) => {
+    const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    if (!chunks.has(key)) {
+      const group = new THREE.Group();
+      g.add(group);
+      chunks.set(key, { group, x: (Math.floor(x / CHUNK) + 0.5) * CHUNK, z: (Math.floor(z / CHUNK) + 0.5) * CHUNK });
+    }
+    return chunks.get(key).group;
+  };
 
   const maker = { forest: forestThing, desert: desertThing, snow: snowThing }[track.def.scenery];
+  /* מפזרים לאורך המסלול: נקודה אקראית על המסלול, ומשם הצידה אל מחוץ לקיר */
+  const want = Math.round(track.length / 11);
   let placed = 0;
-  /* כמות הנוף לפי אורך המסלול — בערך עץ אחד לכל 9 מטרים של כביש */
-  const want = Math.round(track.length / 9);
-  for (let tries = 0; tries < want * 16 && placed < want; tries++) {
-    const x = minX - 90 + rand() * (maxX - minX + 180);
-    const z = minZ - 90 + rand() * (maxZ - minZ + 180);
+  for (let tries = 0; tries < want * 6 && placed < want; tries++) {
+    const i = Math.floor(rand() * track.count);
+    const p = track.points[i], l = track.lefts[i];
+    const side = rand() < 0.5 ? -1 : 1;
+    const dist = WALL_OFFSET + 6 + p.y * 1.6 + rand() * 75;
+    const x = p.x + l.x * side * dist, z = p.z + l.z * side * dist;
     const c = track.clearance(x, z);
-    if (c < 1 || c > 80) continue;
+    if (c < 1) continue;
     const thing = maker(rand);
     thing.scale.multiplyScalar(0.8 + rand() * 0.7);
     thing.rotation.y = rand() * Math.PI * 2;
     thing.position.set(x, 0, z);
-    g.add(thing);
+    chunkAt(x, z).add(thing);
     placed++;
   }
+  track.chunks = [...chunks.values()];
 
-  /* רקע רחוק: הרים, מסות או דיונות גדולות בטבעת סביב המסלול */
-  const ring = span * 0.5 + 220;
+  /* שמיים: הרים ועננים בטבעת שנעה יחד עם המצלמה — במסלול ענק הם תמיד באופק */
+  const sky = new THREE.Group();
+  g.add(sky);
+  track.sky = sky;
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2 + rand() * 0.2;
-    const x = cx + Math.cos(a) * (ring + rand() * 60), z = cz + Math.sin(a) * (ring + rand() * 60);
+    const r = 300 + rand() * 40;
     const far = backdrop(track.def.scenery, rand);
-    far.position.set(x, 0, z);
-    g.add(far);
+    far.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+    sky.add(far);
   }
-
-  /* עננים */
-  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
   const n = track.theme.clouds;
   for (let i = 0; i < n; i++) {
     const cloud = new THREE.Group();
@@ -74,10 +83,10 @@ export function buildScenery(track) {
       puff.position.set(k * 9 - 13, (k % 2) * 2, 0);
       cloud.add(puff);
     }
-    const a = (i / n) * Math.PI * 2;
-    cloud.position.set(cx + Math.cos(a) * (ring + 120), 75 + (i % 3) * 14, cz + Math.sin(a) * (ring + 120));
-    cloud.lookAt(cx, cloud.position.y, cz);
-    g.add(cloud);
+    const a = (i / n) * Math.PI * 2 + 0.3;
+    cloud.position.set(Math.cos(a) * 280, 70 + (i % 3) * 12, Math.sin(a) * 280);
+    cloud.lookAt(0, cloud.position.y, 0);
+    sky.add(cloud);
   }
 
   buildStand(track);

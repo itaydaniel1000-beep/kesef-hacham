@@ -81,6 +81,11 @@ export class Driver {
     this.reverse = 0;
   }
 
+  /* מחשבים מראש את קו המירוץ ותכנון המהירות (בזמן הספירה לאחור), כדי שלא תהיה קפיצה ב"צא!" */
+  prepare(track) {
+    speedPlan(track, this.car, this.skill);
+  }
+
   update(dt, track, boost = 1, others = []) {
     const car = this.car;
     const line = racingLine(track);

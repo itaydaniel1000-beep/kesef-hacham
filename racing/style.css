@@ -793,3 +793,6 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
   .mp-options { grid-template-columns: 1fr; }
   .mp-button { top: 12px; left: 12px; padding: 7px 12px; font-size: .85rem; }
 }
+.mp-random { grid-template-columns: 1fr auto; align-items: center; margin-bottom: 14px; border-color: var(--brand); background: var(--brand-soft); }
+.mp-random .primary-button { width: auto !important; }
+@media (max-width: 560px) { .mp-random { grid-template-columns: 1fr; } .mp-random .primary-button { width: 100% !important; } }

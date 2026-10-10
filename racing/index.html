@@ -118,6 +118,13 @@
         <label class="mp-field">השם שלך
           <input id="mpName" maxlength="14" autocomplete="nickname" placeholder="למשל: שי">
         </label>
+        <div class="mp-option mp-random">
+          <div>
+            <h2>חדר רנדומלי</h2>
+            <p class="lead">מצטרפים לשחקנים אמיתיים. המשחק מתחיל כשיש 9</p>
+          </div>
+          <button id="mpRandom" class="primary-button" type="button">חיפוש משחק</button>
+        </div>
         <div class="mp-options">
           <div class="mp-option">
             <h2>הצטרפות לחדר</h2>
@@ -132,8 +139,14 @@
         </div>
       </div>
       <div id="mpLobby" class="hidden">
-        <p class="lead">קוד החדר — שלחו אותו לחברים:</p>
-        <div id="mpRoomCode" class="room-code"></div>
+        <div id="mpCodeBox">
+          <p class="lead">קוד החדר — שלחו אותו לחברים:</p>
+          <div id="mpRoomCode" class="room-code"></div>
+        </div>
+        <div id="mpPublicBox" class="mp-public hidden">
+          <div id="mpCount" class="room-code">1/9</div>
+          <p id="mpPublicText" class="lead">מחכים לשחקנים אמיתיים. המשחק יתחיל אוטומטית כשיהיו 9</p>
+        </div>
         <p id="mpTrack" class="lead"></p>
         <div id="mpTrackPicker" class="segmented mp-tracks"></div>
         <h2>שחקנים בחדר</h2>

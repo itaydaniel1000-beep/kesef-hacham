@@ -3,6 +3,8 @@
 
 const PEER_SCRIPT = "https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js";
 const PREFIX = "mirotz3d-room-";
+const PUBLIC_PREFIX = "mirotz3d-public-"; // חדרים רנדומליים: מספרים קבועים שכל אחד יכול למצוא
+const PUBLIC_ROOMS = 30;
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // בלי O/0 ו-I/1 שמתבלבלים
 
 let scriptLoading = null;
@@ -63,6 +65,11 @@ export class Room {
       }
     }
     if (!this.peer) throw new Error("לא הצלחנו ליצור חדר, נסו שוב");
+    this.becomeHost();
+    return this.code;
+  }
+
+  becomeHost() {
     this.isHost = true;
     this.myId = "host";
     this.peer.on("connection", (conn) => {
@@ -77,7 +84,73 @@ export class Room {
       conn.on("error", () => {});
     });
     this.watchPeer();
-    return this.code;
+  }
+
+  /* חדר רנדומלי: עוברים על החדרים הציבוריים לפי הסדר. חדר פתוח עם מקום — מצטרפים;
+     מספר שאין בו חדר — פותחים בו חדר חדש ומחכים לאחרים */
+  async quickMatch(hello) {
+    const Peer = await loadPeer();
+    this.isPublic = true;
+    for (let i = 0; i < PUBLIC_ROOMS; i++) {
+      this.peer ||= await openPeer(Peer, undefined);
+      const result = await this.tryJoin(PUBLIC_PREFIX + i, hello);
+      if (result === "joined") {
+        this.code = String(i);
+        return "guest";
+      }
+      if (result === "full") continue;
+      /* אין חדר במספר הזה — לוקחים אותו. אם מישהו הקדים אותנו, מנסים להצטרף אליו */
+      this.peer.destroy();
+      this.peer = null;
+      try {
+        this.peer = await openPeer(Peer, PUBLIC_PREFIX + i);
+      } catch (e) {
+        if (e.type === "unavailable-id") {
+          i--;
+          continue;
+        }
+        throw e;
+      }
+      this.code = String(i);
+      this.becomeHost();
+      return "host";
+    }
+    throw new Error("כל החדרים הרנדומליים מלאים, נסו שוב עוד מעט");
+  }
+
+  /* ניסיון להתחבר לחדר: "joined" / "full" / "none" (אין חדר כזה) */
+  tryJoin(id, hello) {
+    return new Promise((resolve) => {
+      const conn = this.peer.connect(id, { reliable: true });
+      let done = false;
+      const finish = (result) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.peer.off("error", onError);
+        if (result !== "joined") conn.close();
+        resolve(result);
+      };
+      const timer = setTimeout(() => finish("full"), 8000); // לא עונה — מדלגים עליו
+      const onError = (e) => {
+        if (e.type === "peer-unavailable") finish("none");
+      };
+      this.peer.on("error", onError);
+      conn.on("open", () => conn.send(hello));
+      conn.on("data", (msg) => {
+        if (!done) {
+          if (msg.t === "full") return finish("full");
+          this.hostConn = conn;
+          this.myId = this.peer.id;
+          finish("joined");
+        }
+        this.emit("message", msg, "host");
+      });
+      conn.on("close", () => {
+        if (!done) finish("full");
+        else if (this.hostConn === conn && !this.closed) this.emit("hostLeft");
+      });
+    });
   }
 
   /* הצטרפות לחדר קיים לפי קוד */

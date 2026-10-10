@@ -578,7 +578,7 @@ function updateHud() {
 
 function showResults() {
   show("pauseButton", false); // אין מה להשהות במסך הסיום
-  $("againButton").textContent = mpRoster ? "חזרה לחדר" : "עוד מירוץ";
+  $("againButton").textContent = !mpRoster ? "עוד מירוץ" : lobby.public ? "משחק רנדומלי נוסף" : "חזרה לחדר";
   const place = race.placeOf(player);
   const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
   $("resultTitle").textContent = titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
@@ -943,6 +943,9 @@ function frame(now) {
    =================================================================== */
 
 const MAX_CARS = RIVALS + 1;
+/* כמה שחקנים צריך בחדר רנדומלי (9; לבדיקות אפשר להקטין עם ?mpmax=3) */
+const PUBLIC_MAX = Math.min(MAX_CARS, Math.max(2, Number(params.get("mpmax")) || MAX_CARS));
+const roomMax = () => (lobby.public ? PUBLIC_MAX : MAX_CARS);
 const NET_RATE = 1 / 15;   // 15 עדכוני מיקום בשנייה
 let room = null;
 let mpRoster = null;       // במירוץ מולטיפלייר: מי נוהג באיזו מכונית
@@ -1006,6 +1009,7 @@ function buildRosterCars(roster) {
 
 /* שליחת מיקומים: אורח שולח את שלו למארח; המארח שולח לכולם את כל המכוניות */
 function netTick(dt) {
+  if (!room) return;
   netTimer += dt;
   if (netTimer < NET_RATE) return;
   netTimer = 0;
@@ -1022,13 +1026,22 @@ function netTick(dt) {
 function onNetMessage(msg, from) {
   if (room.isHost) {
     if (msg.t === "hello") {
-      if (!lobby.players.some((p) => p.id === from) && lobby.players.length < MAX_CARS) {
+      /* חדר מלא, או שהמשחק כבר התחיל — אומרים לו לחפש חדר אחר */
+      if (!lobby.players.some((p) => p.id === from) && (lobby.players.length >= roomMax() || (lobby.public && mpRoster))) {
+        room.sendTo(from, { t: "full" });
+        return;
+      }
+      if (!lobby.players.some((p) => p.id === from) && lobby.players.length < roomMax()) {
         /* צבע שכבר תפוס בחדר מוחלף בצבע פנוי — שלא יהיו שתי מכוניות זהות */
         const taken = new Set(lobby.players.map((p) => p.color));
         const color = taken.has(msg.color) || !COLORS.some((c) => c.color === msg.color) ? (COLORS.find((c) => !taken.has(c.color)) || COLORS[0]).color : msg.color;
         lobby.players.push({ id: from, name: String(msg.name || "שחקן").slice(0, 14), color, type: CAR_TYPES[msg.type] ? msg.type : "grip" });
       }
       sendLobby();
+      /* חדר רנדומלי: ברגע שיש 9 שחקנים אמיתיים — מתחילים */
+      if (lobby.public && lobby.players.length >= roomMax() && !mpRoster) setTimeout(() => {
+        if (room && !mpRoster && lobby.players.length >= roomMax()) hostStart();
+      }, 1500);
     } else if (msg.t === "state") {
       latestStates.set(from, msg.s);
       netCars.get(from)?.netApply(msg.s);
@@ -1037,6 +1050,12 @@ function onNetMessage(msg, from) {
       room.broadcast(msg, from);
     }
     return;
+  }
+  if (msg.t === "full") {
+    leaveRoom();
+    show("mpStart", true);
+    show("mpLobby", false);
+    return mpError("החדר מלא או שהמשחק כבר התחיל");
   }
   if (msg.t === "lobby") {
     lobby = msg.lobby;
@@ -1060,6 +1079,10 @@ function sendLobby() {
 function renderLobby() {
   show("mpStart", false);
   show("mpLobby", true);
+  show("mpCodeBox", !lobby.public);
+  show("mpPublicBox", !!lobby.public);
+  $("mpCount").textContent = `${lobby.players.length}/${roomMax()}`;
+  $("mpPublicText").textContent = `מחכים לשחקנים אמיתיים. המשחק יתחיל אוטומטית כשיהיו ${roomMax()}`;
   $("mpRoomCode").textContent = room.code;
   const def = TRACKS.find((t) => t.id === lobby.track) || TRACKS[0];
   $("mpTrack").textContent = `מסלול: ${def.emoji} ${def.name}`;
@@ -1075,12 +1098,12 @@ function renderLobby() {
     list.append(li);
   });
   const empty = MAX_CARS - lobby.players.length;
-  if (empty > 0) list.append(el("li", null, `<span class="name">${lobby.bots ? `+ ${empty} בוטים` : `${empty} מקומות ריקים`}</span>`));
+  if (empty > 0 && !lobby.public) list.append(el("li", null, `<span class="name">${lobby.bots ? `+ ${empty} בוטים` : `${empty} מקומות ריקים`}</span>`));
   /* רק המארח בוחר מסלול, בוטים ומתי מתחילים */
-  show("mpTrackPicker", room.isHost);
-  show("mpBotsRow", room.isHost);
-  show("mpGo", room.isHost);
-  show("mpWait", !room.isHost);
+  show("mpTrackPicker", room.isHost && !lobby.public);
+  show("mpBotsRow", room.isHost && !lobby.public);
+  show("mpGo", room.isHost && !lobby.public);
+  show("mpWait", !room.isHost && !lobby.public);
   $("mpBots").checked = lobby.bots;
   markSelected($("mpTrackPicker"), (b) => b.dataset.id === lobby.track);
 }
@@ -1116,6 +1139,17 @@ function attachRoom(r) {
     sendLobby();
   });
   room.on("hostLeft", () => {
+    /* באמצע מירוץ או במסך התוצאות: ממשיכים לבד, בלי חיבור */
+    if (mpRoster) {
+      room?.leave();
+      room = null;
+      return;
+    }
+    /* חדר רנדומלי שהמארח שלו יצא לפני ההתחלה — מחפשים חדר אחר */
+    if (lobby.public) {
+      leaveRoom();
+      return quickMatch();
+    }
     leaveRoom();
     toGarage();
     show("menu", false);
@@ -1163,6 +1197,32 @@ async function joinRoom() {
   }
 }
 
+async function quickMatch() {
+  mpError("");
+  saveName();
+  show("mpStart", true);
+  show("mpLobby", false);
+  $("mpRandom").disabled = true;
+  $("mpRandom").textContent = "מחפשים חדר…";
+  try {
+    const r = new Room();
+    attachRoom(r);
+    lobby = { players: [], track: settings.track, bots: false, public: true };
+    const role = await r.quickMatch({ t: "hello", name: mpName(), color: settings.color, type: settings.type });
+    if (role === "host") {
+      const pick = TRACKS[Math.floor(Math.random() * TRACKS.length)].id;
+      lobby = { players: [{ id: "host", name: mpName(), color: settings.color, type: settings.type }], track: pick, bots: false, public: true };
+      sendLobby();
+    }
+  } catch (e) {
+    leaveRoom();
+    mpError(e.message);
+  } finally {
+    $("mpRandom").disabled = false;
+    $("mpRandom").textContent = "חיפוש משחק";
+  }
+}
+
 function leaveRoom() {
   room?.leave();
   room = null;
@@ -1205,6 +1265,13 @@ function startMultiplayer(msg) {
 
 /* אחרי המירוץ: חוזרים ללובי של החדר (המארח מחזיר את כולם) */
 function backToRoom(fromHere) {
+  /* חדר רנדומלי: אחרי המירוץ מחפשים משחק חדש */
+  if (lobby.public) {
+    leaveRoom();
+    toGarage();
+    openMultiplayer();
+    return quickMatch();
+  }
   if (fromHere && room?.isHost) room.broadcast({ t: "toLobby" });
   if (!room) return toGarage();
   mpRoster = null;
@@ -1215,6 +1282,7 @@ function backToRoom(fromHere) {
 
 $("mpButton").addEventListener("click", openMultiplayer);
 $("mpCreate").addEventListener("click", createRoom);
+$("mpRandom").addEventListener("click", quickMatch);
 $("mpJoin").addEventListener("click", joinRoom);
 $("mpCode").addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinRoom();

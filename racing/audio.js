@@ -1,7 +1,5 @@
 /* ===== קול: המנוע מהקלטות (engine.wav), המוזיקה מקובץ (music.mp3), וכל השאר נוצר בדפדפן ===== */
 
-import { ROAD_HALF } from "./track.js";
-
 /* הילוכים: ספי מהירות יחסית. בכל הילוך הסיבובים עולים, ובהחלפה צונחים */
 const GEARS = [0, 0.2, 0.38, 0.56, 0.74, 0.9];
 
@@ -160,6 +158,13 @@ export class GameAudio {
     });
   }
 
+  /* מעדכנים פרמטר קול רק כשהיעד באמת זז — אחרת מצטברים מאות אירועים בשנייה בציר הזמן של הקול */
+  ramp(param, value, t, tc) {
+    if (param._target !== undefined && Math.abs(param._target - value) <= Math.abs(value) * 0.005 + 1e-4) return;
+    param._target = value;
+    param.setTargetAtTime(value, t, tc);
+  }
+
   /* נקרא בכל פריים עם מצב המכונית של השחקן */
   engine(car, active, dt) {
     if (!this.ctx) return;
@@ -201,24 +206,24 @@ export class GameAudio {
       if (i > 0 && r >= rpms[i - 1] && r <= rpms[i]) w = (r - rpms[i - 1]) / (rpms[i] - rpms[i - 1]);
       else if (i < rpms.length - 1 && r >= rpms[i] && r <= rpms[i + 1]) w = 1 - (r - rpms[i]) / (rpms[i + 1] - rpms[i]);
       else if ((i === 0 && r < rpms[0]) || (i === rpms.length - 1 && r > rpms[i])) w = 1;
-      L.gain.gain.setTargetAtTime(Math.sin((w * Math.PI) / 2), t, 0.03); // שמירה על עוצמה קבועה במעבר
-      L.src.playbackRate.setTargetAtTime(r / L.rpm, t, 0.02);
+      this.ramp(L.gain.gain, Math.sin((w * Math.PI) / 2), t, 0.03); // שמירה על עוצמה קבועה במעבר
+      this.ramp(L.src.playbackRate, r / L.rpm, t, 0.02);
     }
     const bright = 600 + (this.rpm / REDLINE) * 1500 * (0.55 + 0.45 * this.throttle) + (car.nitroOn ? 500 : 0);
-    this.engineFilter.frequency.setTargetAtTime(bright, t, 0.05);
+    this.ramp(this.engineFilter.frequency, bright, t, 0.05);
     const vol = active ? (0.13 + 0.07 * this.throttle) * (0.8 + 0.25 * (this.rpm / REDLINE)) : 0.06;
-    this.engineGain.gain.setTargetAtTime(vol, t, 0.05);
+    this.ramp(this.engineGain.gain, vol, t, 0.05);
 
     /* צמיגים, כביש, רוח וחצץ */
     const sp = Math.min(1.3, Math.abs(car.speed) / car.maxSpeed);
-    const offRoad = Math.abs(car.lateral) > ROAD_HALF + 1;
+    const offRoad = car.offRoad;
     const ground = active && car.grounded ? 1 : 0;
     const skid = ground * Math.min(1, Math.abs(car.slip) * 2.5) * Math.min(1, Math.abs(car.speed) / 20);
-    this.screechGain.gain.setTargetAtTime(skid * 0.045, t, 0.08);
-    this.road.gain.gain.setTargetAtTime(ground * (offRoad ? 0.02 : 0.05) * sp, t, 0.15);
-    this.wind.gain.gain.setTargetAtTime(active ? 0.025 * sp * sp + (car.nitroOn ? 0.015 : 0) : 0, t, 0.2);
-    this.wind.filter.frequency.setTargetAtTime(500 + 900 * sp, t, 0.2);
-    this.gravel.gain.gain.setTargetAtTime(ground * (offRoad ? 0.07 * Math.min(1, sp * 2) : 0), t, 0.08);
+    this.ramp(this.screechGain.gain, skid * 0.045, t, 0.08);
+    this.ramp(this.road.gain.gain, ground * (offRoad ? 0.02 : 0.05) * sp, t, 0.15);
+    this.ramp(this.wind.gain.gain, active ? 0.025 * sp * sp + (car.nitroOn ? 0.015 : 0) : 0, t, 0.2);
+    this.ramp(this.wind.filter.frequency, 500 + 900 * sp, t, 0.2);
+    this.ramp(this.gravel.gain.gain, ground * (offRoad ? 0.07 * Math.min(1, sp * 2) : 0), t, 0.08);
   }
 
   /* העברת הילוך: נקישה רכה */

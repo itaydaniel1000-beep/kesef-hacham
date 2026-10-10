@@ -126,7 +126,7 @@ kbd {
 }
 
 .touch-only { display: none; }
-@media (pointer: coarse) { .touch-only { display: list-item; } }
+body.touch .touch-only { display: list-item; }
 
 .primary-button {
   font-family: var(--f-display);

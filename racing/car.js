@@ -5,6 +5,7 @@ import { PALETTE, toon, outlined, shared, disposeTree } from "./toon.js";
 import { ROAD_HALF, WALL_OFFSET, ROAD_TOP, angleDiff } from "./track.js";
 
 export const CAR_RADIUS = 1.7;
+const OFF_ROAD = ROAD_HALF + 1.2; // מעבר לאבני השפה = מחוץ לכביש
 const GRAVITY = 26;
 
 /* שלושה סוגי מכוניות: כל אחת חזקה במשהו אחר */
@@ -179,18 +180,20 @@ export class Car {
   update(dt, track, others) {
     const { gas, brake, steer, drift, nitro } = this.input;
     const onIce = track.isIce[this.trackIndex] && Math.abs(this.lateral) < ROAD_HALF;
-    const offRoad = Math.abs(this.lateral) > ROAD_HALF + 1.2;
+    const offRoad = Math.abs(this.lateral) > OFF_ROAD;
+    this.offRoad = offRoad; // הקול והאבק קוראים את אותו כלל
 
     /* ההגה זז לכיוון הקלט בהדרגה, כך שגם מקלדת מרגישה חלקה */
     this.steer += (steer - this.steer) * Math.min(1, (steer === 0 ? 7 : 5) * dt);
 
     /* דריפט: מקש ייעודי, או בלם תוך כדי פנייה במהירות */
     const sp = Math.abs(this.speed);
-    const wantsDrift = (drift || (this.brakeDrifts && brake && Math.abs(steer) > 0.3)) && sp > 16 && this.grounded;
-    if (wantsDrift && !this.drifting && Math.abs(this.steer) > 0.25) this.drifting = true;
+    const driftInput = drift || (this.brakeDrifts && brake && Math.abs(steer) > 0.3);
+    /* נכנסים לדריפט מעל 16, ומחזיקים בו עד 12 — כדי שלא ייקטע באמצע פנייה איטית */
+    if (driftInput && !this.drifting && sp > 16 && this.grounded && Math.abs(this.steer) > 0.25) this.drifting = true;
     /* דריפט שהתחיל מהבלם (ולא ממקש הדריפט) ממשיך לבלום — אחרת אי אפשר להאט בפנייה */
     const brakeDrift = this.drifting && !drift;
-    if (this.drifting && (!wantsDrift || sp < 12)) this.drifting = false;
+    if (this.drifting && (!driftInput || sp < 12 || !this.grounded)) this.drifting = false;
 
     /* ניטרו: מחזיקים את המקש כל עוד יש במד */
     if (nitro && this.nitro > 0.02 && (this.nitroOn || this.nitro > 0.15)) {

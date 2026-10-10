@@ -115,6 +115,11 @@ function useTrack(id) {
   scene.fog.far = th.fog[1];
   hemi.groundColor.set(th.hemiGround);
   prepareMinimap();
+  /* קו המירוץ ותכנון המהירות מחושבים ברקע בזמן שאתה במוסך, כדי שהלחיצה על "יוצאים" לא תקפא */
+  const forTrack = track;
+  setTimeout(() => {
+    if (track === forTrack && state === "menu") for (const d of drivers) d.prepare(track);
+  }, 50);
 }
 
 let player = null;
@@ -296,7 +301,8 @@ function buildGarage() {
 
 const input = new Input();
 input.bindTouch($("touch"));
-const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
+/* מכשיר מגע = מצביע "גס" (אצבע). מחשב נייד עם מסך מגע ועכבר נשאר עם מקלדת */
+const isTouch = matchMedia("(pointer: coarse)").matches;
 if (isTouch) document.body.classList.add("touch");
 
 let state = "menu"; // menu | countdown | race | finished | paused
@@ -585,7 +591,7 @@ function effects(dt) {
         particles.emit("smoke", x, y, z, 0xf2f4f8, { vx, vz });
       }
     }
-    if (car.grounded && Math.abs(car.lateral) > 8.4 && Math.abs(car.speed) > 10) {
+    if (car.grounded && car.offRoad && Math.abs(car.speed) > 10) {
       const [x, y, z] = rearOf(car, 0);
       particles.emit("dust", x, y, z, track.theme.dust, { vx, vz, spread: 3 });
     }
@@ -692,13 +698,10 @@ function step(dt) {
 
   const level = LEVELS[settings.level];
   if (player.finished || autopilot) {
-    (autopilot || cooldownDriver).update(dt, track, 1, cars);
-    if (player.finished) {
-      /* אחרי הסיום ממשיכים לגלגל לאט כמו הבוטים — מכונית עומדת על הקו הייתה חוסמת את מי שמסיים אחריך */
-      player.input.nitro = 0;
-      player.input.gas = player.speed < 15 ? 1 : 0;
-      player.input.brake = player.speed > 18 ? 0.4 : 0;
-    }
+    /* אחרי הסיום ממשיכים לגלגל לאט (cruise) — מכונית עומדת על הקו הייתה חוסמת את מי שמסיים אחריך */
+    const driver = autopilot || cooldownDriver;
+    driver.cruise = player.finished ? 15 : 0;
+    driver.update(dt, track, 1, cars);
   } else {
     Object.assign(player.input, input.read());
   }
@@ -706,8 +709,8 @@ function step(dt) {
     /* גומייה עדינה: מי שבורח רחוק מאט מעט, מי שנשאר הרחק מאחור מקבל דחיפה */
     const gap = (d.car.distance - player.distance) / track.count;
     const boost = d.car.finished || player.finished ? 0.8 : 1 - Math.max(-level.behind, Math.min(level.ahead, gap * 0.8));
+    d.cruise = d.car.finished ? 15 : 0;
     d.update(dt, track, boost, cars);
-    if (d.car.finished) d.car.input.gas = d.car.speed < 15 ? 1 : 0;
   }
   for (const car of cars) car.update(dt, track, cars);
   resolveCollisions(cars);

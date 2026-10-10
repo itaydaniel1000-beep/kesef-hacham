@@ -82,9 +82,12 @@ export class Driver {
     this.usingNitro = false;
     this.stuck = 0;
     this.reverse = 0;
+    this.passing = null;     // את מי עוקפים עכשיו, ומאיזה צד
+    this.passSide = 0;
+    this.cruise = 0;         // מהירות שיוט אחרי הסיום (0 = מירוץ רגיל)
   }
 
-  /* מחשבים מראש את קו המירוץ ותכנון המהירות (בזמן הספירה לאחור), כדי שלא תהיה קפיצה ב"צא!" */
+  /* מחשבים מראש את קו המירוץ ותכנון המהירות — ברקע במוסך (main.js), ולכל המאוחר בלחיצה על "יוצאים" */
   prepare(track) {
     this.planTrack = track;
     this.plan = speedPlan(track, this.car, this.skill);
@@ -114,15 +117,26 @@ export class Driver {
     /* עקיפה: מכונית איטית ממש לפנינו על אותו קו? עוברים לצד שיש בו יותר מקום */
     let want = 0;
     const ahead = 16 / track.spacing;
+    /* הקרבה נמדדת מהקו הרגיל שלנו (בלי הזזת העקיפה), כדי שהעקיפה לא "תשכח" את המכונית באמצע ותתנדנד */
+    const myLine = line.off[i] + this.lane;
+    let slow = null;
     for (const o of others) {
       if (o === car) continue; // גם מכונית שסיימה עדיין על הכביש
       const gap = o.distance - car.distance;
       if (gap <= 0 || gap > ahead || Math.abs(o.y - car.y) > 2.5) continue;
-      const myLat = line.off[i] + this.lane + this.avoid;
-      if (Math.abs(o.lateral - myLat) > 3 || o.speed > car.speed + 1.5) continue;
-      const side = o.lateral > 0 ? -1 : 1; // לצד הרחב יותר
-      want = o.lateral + side * 3.6 - line.off[i] - this.lane;
+      if (Math.abs(o.lateral - myLine) > 3 || o.speed > car.speed + 1.5) continue;
+      slow = o;
       break;
+    }
+    if (slow) {
+      /* הצד נבחר פעם אחת לכל עקיפה — לצד הרחב יותר — ולא מתחלף באמצע */
+      if (this.passing !== slow) {
+        this.passing = slow;
+        this.passSide = slow.lateral > 0 ? -1 : 1;
+      }
+      want = slow.lateral + this.passSide * 3.6 - myLine;
+    } else {
+      this.passing = null;
     }
     this.avoid += (want - this.avoid) * Math.min(1, 3 * dt);
 
@@ -154,6 +168,10 @@ export class Driver {
     if (!this.usingNitro && car.nitro > 0.3 && minAhead >= car.maxSpeed * 0.97 && boost >= 0.98) this.usingNitro = true;
     if (this.usingNitro && (car.nitro < 0.03 || minAhead < car.maxSpeed * 0.9)) this.usingNitro = false;
     if (this.usingNitro || car.padBoost > 0) target = Math.max(target, Math.min(minAhead * 1.28, car.maxSpeed * 1.28));
+    if (this.cruise) {
+      target = Math.min(target, this.cruise);
+      this.usingNitro = false;
+    }
 
     car.input.nitro = this.usingNitro ? 1 : 0;
     if (v < target - 0.3) {

@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { toon, outlined, shared } from "./toon.js";
 import { WALL_OFFSET } from "./track.js";
+import { gltfLoader } from "./loaders.js";
 
 /* זרע קבוע לעיוותים של הגאומטריות המשותפות */
 let gseed = 3;
@@ -106,6 +107,34 @@ function cloudTexture() {
   return cloudTex;
 }
 
+/* ===== מודלים מ-Meshy (עצים, סלעים, קקטוס, איש שלג, צופה). אם הטעינה נכשלת — נשארים הצורות שלמטה ===== */
+let models = null;
+const CASTS = new Set(["pine", "oak", "pine_snow", "cactus", "snowman"]);
+
+export async function loadSceneryModels() {
+  const loader = await gltfLoader();
+  const names = ["pine", "oak", "pine_snow", "cactus", "snowman", "rock", "rock_desert", "spectator"];
+  const entries = await Promise.all(names.map(async (name) => {
+    const gltf = await loader.loadAsync(`assets/meshy/${name}.glb`);
+    let mesh = null;
+    gltf.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
+    gltf.scene.updateMatrixWorld(true);
+    /* הגאומטריה עם כל הטרנספורמציות של הקובץ, והתחתית על הקרקע (y=0) */
+    const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    geometry.computeBoundingBox();
+    const b = geometry.boundingBox;
+    geometry.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+    const material = new THREE.MeshStandardMaterial({ map: mesh.material.map, roughness: 0.92, metalness: 0 });
+    return [name, {
+      geometry: shared(geometry),
+      material: shared(material),
+      height: b.max.y - b.min.y,
+      radius: Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2
+    }];
+  }));
+  models = Object.fromEntries(entries);
+}
+
 export function buildScenery(track) {
   const g = track.group;
   /* זרע קבוע = אותו נוף בכל טעינה */
@@ -126,6 +155,7 @@ export function buildScenery(track) {
   };
 
   const maker = { forest: forestThing, desert: desertThing, snow: snowThing }[track.def.scenery];
+  const pending = new Map(); // אזור -> מודל -> מטריצות
   /* מפזרים לאורך המסלול: נקודה אקראית על המסלול, ומשם הצידה אל מחוץ לקיר */
   const want = Math.round(track.length / 11);
   let placed = 0;
@@ -137,6 +167,23 @@ export function buildScenery(track) {
     const x = p.x + l.x * side * dist, z = p.z + l.z * side * dist;
     const thing = maker(rand);
     const scale = 0.8 + rand() * 0.7;
+    if (thing.model) {
+      /* מודל: לא יוצרים עצם — רק אוספים מיקום, ובסוף כל האזור נצייר כ-InstancedMesh אחד לכל מודל */
+      const m = models[thing.model];
+      const k = (thing.h / m.height) * scale;
+      if (track.clearance(x, z) < 1 + m.radius * k) continue;
+      const group = chunkAt(x, z);
+      if (!pending.has(group)) pending.set(group, new Map());
+      const list = pending.get(group);
+      if (!list.has(thing.model)) list.set(thing.model, []);
+      list.get(thing.model).push(new THREE.Matrix4().compose(
+        new THREE.Vector3(x, 0, z),
+        new THREE.Quaternion().setFromAxisAngle(UP, rand() * Math.PI * 2),
+        new THREE.Vector3(k, k, k)
+      ));
+      placed++;
+      continue;
+    }
     /* גם הקצה של עצם רחב (דיונה) צריך להישאר מחוץ לקיר, לא רק המרכז שלו */
     if (track.clearance(x, z) < 1 + (thing.userData.radius || 0) * scale) continue;
     thing.scale.multiplyScalar(scale);
@@ -144,6 +191,17 @@ export function buildScenery(track) {
     thing.position.set(x, 0, z);
     chunkAt(x, z).add(thing);
     placed++;
+  }
+  for (const [group, list] of pending) {
+    for (const [name, matrices] of list) {
+      const m = models[name];
+      const inst = new THREE.InstancedMesh(m.geometry, m.material, matrices.length);
+      matrices.forEach((mat, i) => inst.setMatrixAt(i, mat));
+      inst.computeBoundingSphere();
+      inst.castShadow = CASTS.has(name);
+      inst.receiveShadow = true;
+      group.add(inst);
+    }
   }
   track.sceneryChunks = [...chunks.values()];
 
@@ -182,9 +240,12 @@ function rock(color, rand) {
 
 const FOREST_GREENS = [0x2f5a2a, 0x3b6b31, 0x46793a, 0x2c4f2c];
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 function forestThing(rand) {
-  const t = new THREE.Group();
   const kind = rand();
+  if (models) return kind < 0.12 ? { model: "rock", h: 1.8 } : kind < 0.55 ? { model: "pine", h: 9 } : { model: "oak", h: 7.5 };
+  const t = new THREE.Group();
   if (kind < 0.12) {
     t.add(rock(0x8b8984, rand));
     return t;
@@ -197,8 +258,10 @@ function forestThing(rand) {
 }
 
 function desertThing(rand) {
-  const t = new THREE.Group();
   const kind = rand();
+  if (models && kind < 0.5) return { model: "cactus", h: 5 };
+  if (models && kind < 0.8) return { model: "rock_desert", h: 2.2 };
+  const t = new THREE.Group();
   if (kind < 0.5) {
     const green = rand() < 0.5 ? 0x4f7a3a : 0x5c8442;
     const body = outlined(geo.cactus, green);
@@ -230,8 +293,9 @@ function desertThing(rand) {
 }
 
 function snowThing(rand) {
-  const t = new THREE.Group();
   const kind = rand();
+  if (models) return kind < 0.1 ? { model: "snowman", h: 3.4 } : kind < 0.2 ? { model: "rock", h: 1.8 } : { model: "pine_snow", h: 9 };
+  const t = new THREE.Group();
   if (kind < 0.1) {
     /* איש שלג */
     for (const [r, y] of [[1.3, 1.2], [0.95, 3], [0.65, 4.4]]) {
@@ -290,18 +354,36 @@ function buildStand(track) {
     const shirts = [0xb83a32, 0x2f5fa8, 0xe0b23a, 0x3d7a46, 0x2b2d33, 0xe8e8e8, 0x7a4fa0];
     const skins = [0xe0b48f, 0xc68e64, 0x8d5a3b, 0xf0cba8];
     let k = 0;
+    const fans = models ? [] : null;
     for (let row = 0; row < 4; row++) {
       const step = outlined(geo.step, 0xb9bdc4);
       step.position.set(row * 3, 0.6 + row * 1.2, 0);
       stand.add(step);
       for (let z = -18.5; z < 19; z += 1.3 + ((k * 7) % 5) * 0.25) {
         k++;
+        if (fans) {
+          /* צופה אמיתי, עומד על המדרגה ופונה לכביש (הכביש בצד ה-x השלילי של היציע) */
+          const kk = 1.75 / models.spectator.height;
+          fans.push(new THREE.Matrix4().compose(
+            new THREE.Vector3(row * 3, 1.2 + row * 1.2, z),
+            new THREE.Quaternion().setFromAxisAngle(UP, -Math.PI / 2 + (((k * 13) % 7) - 3) * 0.12),
+            new THREE.Vector3(kk, kk, kk)
+          ));
+          continue;
+        }
         const body = outlined(geo.fanBody, shirts[(k * 5 + row) % shirts.length]);
         body.position.set(row * 3, 1.65 + row * 1.2, z);
         const head = new THREE.Mesh(geo.fanHead, toon(skins[(k * 3) % skins.length]));
         head.position.set(row * 3, 2.2 + row * 1.2, z);
         stand.add(body, head);
       }
+    }
+    if (fans) {
+      const inst = new THREE.InstancedMesh(models.spectator.geometry, models.spectator.material, fans.length);
+      fans.forEach((m, i) => inst.setMatrixAt(i, m));
+      inst.computeBoundingSphere();
+      inst.castShadow = true;
+      stand.add(inst);
     }
     stand.position.set(p0.x + l0.x * side * (WALL_OFFSET + 3), p0.y, p0.z + l0.z * side * (WALL_OFFSET + 3));
     /* השורה הראשונה ליד הקיר, והשורות הבאות מתרחקות מהכביש */

@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { shared, disposeTree } from "./toon.js";
 import { rimFace } from "./textures.js";
+import { gltfLoader } from "./loaders.js";
 import { ROAD_HALF, WALL_OFFSET, ROAD_TOP, angleDiff } from "./track.js";
 
 export const CAR_RADIUS = 1.7;
@@ -50,19 +51,94 @@ const darkTrimMat = shared(new THREE.MeshStandardMaterial({ color: 0x2a2c30, rou
 const realGlassMat = shared(new THREE.MeshPhysicalMaterial({ color: 0x0a0d11, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.55, clearcoat: 1 }));
 
 /* טוענים פעם אחת; כל מכונית מקבלת עותק שחולק את הגאומטריה. אם הטעינה נכשלת — נשארים עם הדגם הפשוט */
+/* ===== מכוניות מ-Meshy: אחת לכל סוג, קרובה ורחוקה; הצבע של הפח מוחלף בצבע שבחרת ===== */
+let meshyCars = null;
+
+/* כמה בהיר הצבע "הממוצע" של הפח בטקסטורה (במרחב לינארי) — ממנו מחשבים את הצבע החדש */
+function paintLuma(image) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  g.drawImage(image, 0, 0, 64, 64);
+  const d = g.getImageData(0, 0, 64, 64).data;
+  const lin = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  let sum = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = lin(d[i]), gg = lin(d[i + 1]), b = lin(d[i + 2]);
+    const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+    if (mx > 0.12 && (mx - mn) / mx > 0.55) {
+      sum += 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+      n++;
+    }
+  }
+  return n ? sum / n : 0.3;
+}
+
+async function loadMeshyCars(loader) {
+  const out = {};
+  await Promise.all(["speed", "grip", "accel"].map(async (type) => {
+    const files = [`assets/meshy/car_${type}.glb`, `assets/meshy/car_${type}_far.glb`];
+    const [near, far] = (await Promise.all(files.map((f) => loader.loadAsync(f)))).map((g) => {
+      let mesh = null;
+      g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
+      mesh.geometry.userData.shared = true;
+      mesh.material.map.userData.shared = true;
+      /* הדגם בנוי לאורך x עם החרטום ל-x שלילי; מסובבים כך שהחרטום יפנה ל-z חיובי */
+      const pivot = new THREE.Group();
+      g.scene.rotation.y = Math.PI / 2;
+      pivot.add(g.scene);
+      pivot.updateMatrixWorld(true);
+      return { pivot, mesh, box: new THREE.Box3().setFromObject(pivot) };
+    });
+    out[type] = { near, far, ref: paintLuma(near.mesh.material.map.image) };
+  }));
+  return out;
+}
+
+/* חומר צבע לכל סוג וצבע: פיקסלים צבעוניים בטקסטורה (הפח) מקבלים את הצבע שבחרת באותה בהירות יחסית;
+   חלונות, צמיגים וכרום (אפורים/כהים) נשארים כמו שהם */
+const meshyPaints = new Map();
+function meshyPaint(type, color, map, ref) {
+  const key = `${type}:${color}:${map.uuid}`;
+  if (!meshyPaints.has(key)) {
+    const m = new THREE.MeshPhysicalMaterial({ map, roughness: 0.38, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const paint = new THREE.Color(color); // three ממיר ללינארי
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.paintColor = { value: paint };
+      shader.uniforms.paintRef = { value: ref };
+      shader.fragmentShader = "uniform vec3 paintColor;\nuniform float paintRef;\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        `#ifdef USE_MAP
+          vec4 texel = texture2D( map, vMapUv );
+          float mx = max( texel.r, max( texel.g, texel.b ) );
+          float mn = min( texel.r, min( texel.g, texel.b ) );
+          float sat = mx > 0.0 ? ( mx - mn ) / mx : 0.0;
+          float w = smoothstep( 0.35, 0.6, sat ) * smoothstep( 0.02, 0.1, mx );
+          float lum = dot( texel.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+          vec3 painted = clamp( paintColor * ( lum / paintRef ), 0.0, 1.0 );
+          diffuseColor.rgb *= mix( texel.rgb, painted, w );
+        #endif`
+      );
+    };
+    m.customProgramCacheKey = () => "meshy-paint";
+    meshyPaints.set(key, shared(m));
+  }
+  return meshyPaints.get(key);
+}
+
 export async function loadCarModel() {
-  const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
-    import("three/addons/loaders/GLTFLoader.js"),
-    import("three/addons/loaders/DRACOLoader.js")
-  ]);
-  const draco = new DRACOLoader().setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/");
-  const loader = new GLTFLoader().setDRACOLoader(draco);
+  const loader = await gltfLoader();
+  try {
+    meshyCars = await loadMeshyCars(loader);
+    return;
+  } catch (e) {
+    console.warn("meshy cars:", e); // נופלים חזרה ל-Ferrari
+  }
   const [gltf, farGltf, ao] = await Promise.all([
     loader.loadAsync("assets/ferrari.glb"),
     loader.loadAsync("assets/ferrari_far.glb"), // גרסה מפושטת (כ-17 אלף משולשים) למכוניות רחוקות
     new THREE.TextureLoader().loadAsync("assets/ferrari_ao.png")
   ]);
-  draco.dispose();
   const model = gltf.scene;
   /* דיסקי הבלמים מוסתרים מאחורי החישוקים — חוסכים את הפוליגונים שלהם. תא הנוסעים נשאר: המכונית פתוחה */
   for (const name of ["brake", "brake_1", "brake_2", "brake_3"]) {
@@ -253,9 +329,37 @@ export class Car {
     this.blob.position.y = 0.1;
     car.add(this.blob);
 
-    if (realCar) this.useRealModel(car, body, s, paint);
+    if (meshyCars) this.useMeshyModel(car, body, s);
+    else if (realCar) this.useRealModel(car, body, s, paint);
     car.rotation.order = "YXZ";
     return car;
+  }
+
+  /* מכונית Meshy: מקרוב הדגם המלא, מרחוק הגרסה המפושטת; הצבע מוחלף בצבע שבחרת */
+  useMeshyModel(car, body, s) {
+    for (const o of [...body.children]) if (o !== this.flames) body.remove(o);
+    for (const w of this.wheels) car.remove(w.parent);
+    this.wheels = [];
+    this.frontPivots = [];
+    this.realWheels = []; // בדגם של Meshy הגלגלים לא נפרדים
+    this.realFront = [];
+    this.realRadius = 1;
+    const spec = meshyCars[this.type];
+    const lod = new THREE.LOD();
+    for (const [part, distance] of [[spec.near, 0], [spec.far, this.detail]]) {
+      const size = part.box.getSize(new THREE.Vector3());
+      const k = s.len / size.z;
+      const real = part.pivot.clone(true);
+      real.scale.setScalar(k);
+      real.position.y = -part.box.min.y * k + 0.02;
+      real.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = meshyPaint(this.type, this.color, part.mesh.material.map, spec.ref);
+        o.castShadow = true;
+      });
+      lod.addLevel(real, distance);
+    }
+    body.add(lod);
   }
 
   /* הדגם האמיתי מקרוב, והדגם הפשוט מרחוק (LOD) — תשע מכוניות מפורטות כבדות מדי לטלפון */

@@ -6,6 +6,7 @@ import { PALETTE } from "./toon.js";
 import { Track } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, resolveCollisions, loadCarModel } from "./car.js";
+import { loadSceneryModels } from "./scenery.js";
 import { Driver } from "./ai.js";
 import { Input } from "./input.js";
 import { Race, formatTime } from "./race.js";
@@ -853,6 +854,7 @@ startButton.disabled = true;
 startButton.textContent = "טוען…";
 await Promise.all([
   loadCarModel().catch((e) => console.warn("car model:", e)),
+  loadSceneryModels().catch((e) => console.warn("scenery models:", e)),
   loadPhotoEnvironment().catch((e) => console.warn("environment:", e))
 ]);
 startButton.disabled = false;

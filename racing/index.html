@@ -82,6 +82,13 @@
   </div>
   <div id="flash" class="flash"></div>
 
+  <!-- ===== שידור חוזר ===== -->
+  <div id="replayBar" class="replay-bar hidden">
+    <span class="replay-tag">● שידור חוזר ×2</span>
+    <div class="replay-track"><div id="replayFill"></div></div>
+    <button id="replayExit" class="secondary-button" type="button">יציאה <span class="key-hint">(Esc)</span></button>
+  </div>
+
   <!-- ===== מוסך: בחירת מסלול, מכונית, צבע וקושי ===== -->
   <div id="menu" class="overlay">
     <div class="card card-wide">
@@ -280,6 +287,7 @@
       <div id="rewards" class="rewards"></div>
       <div class="button-row">
         <button id="againButton" class="primary-button">עוד מירוץ</button>
+        <button id="replayButton" class="secondary-button" type="button">שידור חוזר</button>
         <button id="garageButton" class="secondary-button">למוסך</button>
       </div>
     </div>

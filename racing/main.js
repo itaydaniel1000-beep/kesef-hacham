@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { Sky } from "three/addons/objects/Sky.js";
 import { PALETTE } from "./toon.js";
-import { Track } from "./track.js";
+import { Track, WALL_OFFSET } from "./track.js";
 import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, BASE_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
@@ -11,6 +11,7 @@ import { ItemSystem, ITEMS, ROLL_TIME } from "./items.js";
 import { Room } from "./net.js";
 import { Skids } from "./skids.js";
 import { Coins } from "./coins.js";
+import { Replay, REPLAY_SPEED } from "./replay.js";
 import {
   profile, saveProfile, levelInfo, FINISHES, GLOWS, SPOILER_PRICE, buy, isUnlocked, UNLOCKS,
   dailyChallenges, finishRace, recordOf, saveGhost, loadGhost
@@ -172,6 +173,7 @@ applyQuality();
 
 const particles = new Particles(scene);
 const skids = new Skids(scene);
+const replay = new Replay();
 const confetti = new Particles(scene, 100); // מאגר נפרד, כדי שעשן ולהבות לא ימחקו את קונפטי הניצחון
 const audio = new GameAudio();
 audio.muted = settings.muted;
@@ -525,6 +527,7 @@ function startRace() {
   setupGhost();
   Object.assign(fpsProbe, { frames: 0, time: 0, done: false });
   skids.clear();
+  replay.reset();
   netTimer = 0;
   state = "countdown";
   countdown = 3.999;
@@ -626,6 +629,10 @@ addEventListener("keydown", (e) => {
   }
   if (spectating && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
     spectateIndex += e.code === "ArrowLeft" ? 1 : -1;
+    return;
+  }
+  if (state === "replay" && e.code === "Escape") {
+    exitReplay();
     return;
   }
   if (e.code === "Escape" || e.code === "KeyP") {
@@ -1108,6 +1115,7 @@ function step(dt) {
   }
   resolveCollisions(cars);
   if (mpRoster) netTick(dt);
+  if (!spectating) replay.record(cars, dt);
   items.update(dt, cars, true);
   const got = coins.update(dt, player, items.enabled);
   if (got) {
@@ -1159,6 +1167,8 @@ function frame(now) {
 
   if (state === "paused") {
     /* בהשהיה לא מציירים בכל פריים — רק פעמיים בשנייה, למקרה שהדפדפן ניקה את התמונה */
+  } else if (state === "replay") {
+    replayFrame(dt);
   } else if (state === "menu") {
     /* מוסך: המצלמה מסתובבת לאט סביב המכוניות בגריד */
     orbit += dt * 0.25;
@@ -1176,6 +1186,8 @@ function frame(now) {
     updateCamera(dt, spectating ? spectateTarget() : player);
     if (!spectating) updateHud();
     audio.engine(player, true, dt);
+    /* במולטיפלייר: שידור חוזר רק כשכולם סיימו — אחרת היינו מפסיקים לשלוח את המיקום שלנו */
+    if (state === "finished" && !resultsShownAt) show("replayButton", replay.frames.length > 10 && (!mpRoster || cars.every((c) => c.finished)));
   }
 
   /* בהשהיה התמונה האחרונה נשארת על המסך — אין טעם לצייר אותה שוב 60 פעמים בשנייה */
@@ -1920,6 +1932,78 @@ function spectateTarget() {
 $("spectatePrev").addEventListener("click", () => spectateIndex++);
 $("spectateNext").addEventListener("click", () => spectateIndex--);
 
+/* ===================================================================
+   שידור חוזר: מנגנים את ההקלטה במהירות כפולה, עם ארבע מצלמות שמתחלפות
+   =================================================================== */
+const replayCam = { mode: 0, timer: 0, anchor: new THREE.Vector3() };
+const REPLAY_CAMS = 4; // מאחור, מהצד, נייחת ליד המסלול, מלמעלה
+function startReplay() {
+  if (replay.frames.length < 10) return;
+  state = "replay";
+  replay.time = 0;
+  replayCam.mode = -1;
+  replayCam.timer = 0;
+  skids.clear();
+  particles.clear();
+  if (ghost) ghost.car.mesh.visible = false;
+  show("results", false);
+  show("hud", false);
+  show("touch", false);
+  show("replayBar", true);
+}
+function exitReplay() {
+  if (state !== "replay") return;
+  replay.apply(cars, replay.duration); // המכוניות חוזרות למקום שבו היו כשהשידור התחיל
+  state = "finished";
+  resultsShownAt = 0;
+  show("replayBar", false);
+  show("hud", true);
+  show("results", true);
+}
+function replayTarget() {
+  if (!spectating) return player;
+  return race.standings().find((c) => c !== player) || player;
+}
+function replayFrame(dt) {
+  replay.time += dt * REPLAY_SPEED;
+  if (replay.time >= replay.duration) return exitReplay();
+  replay.apply(cars, replay.time);
+  for (const car of cars) car.syncMesh(dt, track);
+  const target = replayTarget();
+  replayCam.timer -= dt;
+  /* מצלמה נייחת: עומדת בצד המסלול קצת לפני המכונית ומחכה שתעבור; כשהמכונית התרחקה — קופצת קדימה */
+  const placeAnchor = () => {
+    const i = track.wrap(target.trackIndex + Math.round(Math.max(40, target.speed * 1.6) / track.spacing));
+    /* באותו צד של הכביש שבו המכונית נוסעת, ומספיק גבוה כדי לראות מעל הקיר והסוללה */
+    const side = (target.lateral >= 0 ? 1 : -1) * (WALL_OFFSET + 4);
+    const p = track.points[i], l = track.lefts[i];
+    replayCam.anchor.set(p.x + l.x * side, p.y + 6.5, p.z + l.z * side);
+  };
+  if (replayCam.timer <= 0) {
+    replayCam.mode = (replayCam.mode + 1) % REPLAY_CAMS;
+    replayCam.timer = 5;
+    placeAnchor();
+  }
+  if (replayCam.mode === 2 && Math.hypot(replayCam.anchor.x - target.x, replayCam.anchor.z - target.z) > 75) placeAnchor();
+  lookBack = false;
+  updateCamera(dt, target); // שמיים, שמש ונוף לפי המכונית — והמצלמה "מאחור"
+  const fx = Math.sin(target.heading), fz = Math.cos(target.heading);
+  if (replayCam.mode === 1) {
+    camera.position.set(target.x + fz * 8, target.y + 2.2, target.z - fx * 8);
+    camera.lookAt(target.x, target.y + 1, target.z);
+  } else if (replayCam.mode === 2) {
+    camera.position.copy(replayCam.anchor);
+    camera.lookAt(target.x, target.y + 1, target.z);
+  } else if (replayCam.mode === 3) {
+    camera.position.set(target.x - fx * 12, target.y + 26, target.z - fz * 12);
+    camera.lookAt(target.x + fx * 6, target.y, target.z + fz * 6);
+  }
+  $("replayFill").style.width = `${Math.min(100, (replay.time / replay.duration) * 100)}%`;
+  audio.engine(player, false, dt);
+}
+$("replayButton").addEventListener("click", startReplay);
+$("replayExit").addEventListener("click", exitReplay);
+
 /* טעינת הדגם האמיתי ותאורת הסביבה המצולמת; עד אז אי אפשר לצאת למירוץ */
 const startButton = $("startButton");
 const startLabel = startButton.textContent;
@@ -1954,6 +2038,7 @@ window.__race = {
   get track() { return track; },
   get items() { return items; },
   skids,
+  replay,
   profile,
   get rewards() { return rewards; },
   get ghost() { return ghost; },

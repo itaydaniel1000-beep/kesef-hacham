@@ -894,3 +894,16 @@ body.touch .touch-only-flex { display: flex; }
 .spectate button { font: inherit; font-size: 1.2rem; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .1); color: #fff; }
 .touch-only-inline { display: none; }
 body.touch .touch-only-inline { display: inline-block; }
+
+/* ===== שידור חוזר ===== */
+.replay-bar {
+  position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(620px, 92vw); display: flex; align-items: center; gap: 12px; padding: 10px 14px; z-index: 20;
+  border-radius: 14px; background: rgba(10, 13, 19, .7); color: #fff;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.replay-tag { font-family: var(--f-display); font-weight: 800; color: #ff5a4a; white-space: nowrap; animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.replay-track { flex: 1; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+#replayFill { height: 100%; width: 0; background: var(--brand); }
+.replay-bar .secondary-button { padding: 6px 12px; white-space: nowrap; }

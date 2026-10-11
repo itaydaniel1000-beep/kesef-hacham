@@ -1323,7 +1323,7 @@ function onNetMessage(msg, from) {
         const taken = new Set(lobby.players.map((p) => p.color));
         const color = (COLORS.find((c) => !taken.has(c.color)) || COLORS[0]).color;
         lobby.players.push({ id: from, name: String(msg.name || "שחקן").slice(0, 14), color, type: CAR_TYPES[msg.type] ? msg.type : "grip" });
-        room.sendTo(from, { t: "spectate", track: track.def.id, laps: race.laps, roster: mpRoster, time: race.time, lobby });
+        room.sendTo(from, { t: "spectate", track: track.def.id, laps: race.laps, level: mpLevel, roster: mpRoster, gone: [...goneIds], time: race.time, lobby });
         return;
       }
       /* חדר מלא, או שהמשחק כבר התחיל — אומרים לו לחפש חדר אחר */
@@ -1386,9 +1386,10 @@ function onNetMessage(msg, from) {
 function dropNetCar(id) {
   const car = netCars.get(id);
   if (!car) return;
+  car.gone = true; // אחרון בטבלה, ולא בין המכוניות שאפשר לצפות בהן
   if (!car.finished) {
     car.finished = true;
-    car.finishTime = Infinity; // אחרון בטבלה
+    car.finishTime = Infinity;
   }
   car.net = null; // בלי החלקה לעבר המצב האחרון
   car.y = -1000;  // מחוץ לעולם: לא נראית ולא מתנגשת
@@ -1466,6 +1467,7 @@ function attachRoom(r) {
     lobby.players = lobby.players.filter((p) => p.id !== id);
     latestStates.delete(id);
     if (mpRoster) {
+      goneIds.add(id);
       room.broadcast({ t: "gone", id });
       dropNetCar(id);
     }
@@ -1599,7 +1601,9 @@ function hostStart() {
 }
 
 let mpLevel = "normal"; // הקושי שהמארח בחר — הוא שקובע לפרסים ולאתגרים
+const goneIds = new Set(); // אצל המארח: מי שהתנתק במירוץ הנוכחי
 function startMultiplayer(msg) {
+  goneIds.clear();
   mpRoster = msg.roster;
   mpLevel = msg.level || settings.level;
   raceLaps = msg.laps || 1;
@@ -1946,7 +1950,9 @@ function startSpectating(msg) {
   settings.track = currentTrackId = msg.track;
   useTrack(msg.track);
   setupGhost(); // רוח ישנה מנגד השעון לא נכנסת למירוץ של אחרים
-  buildCars(msg.roster); // אני לא ברשימה — כל המכוניות מגיעות מהרשת (והמכוניות של המוסך מוסרות)
+  buildCars(msg.roster);
+  for (const id of msg.gone || []) dropNetCar(id); // מי שכבר יצא מהמירוץ
+  // אני לא ברשימה — כל המכוניות מגיעות מהרשת (והמכוניות של המוסך מוסרות)
   /* "שחקן" דמה שלא נוסע ולא מצויר, כדי שכל השאר יעבוד כרגיל */
   player = new Car({ name: "צופה", color: settings.color, type: "grip" });
   player.placeAt(track, 0, 0);
@@ -1979,7 +1985,7 @@ function stopSpectating() {
   show("spectate", false);
 }
 function spectateTarget() {
-  const order = race.standings().filter((c) => c !== player);
+  const order = race.standings().filter((c) => c !== player && !c.gone);
   if (!order.length) return player;
   spectateIndex = ((spectateIndex % order.length) + order.length) % order.length;
   const car = order[spectateIndex];

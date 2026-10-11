@@ -27,6 +27,8 @@ export class Race {
 
   standings() {
     return [...this.cars].sort((a, b) => {
+      /* מי שהתנתק באמצע — תמיד בסוף הטבלה */
+      if (!!a.gone !== !!b.gone) return a.gone ? 1 : -1;
       if (a.finished && b.finished) return a.finishTime - b.finishTime || b.distance - a.distance;
       if (a.finished) return -1;
       if (b.finished) return 1;

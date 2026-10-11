@@ -8,7 +8,7 @@ import { TRACKS, findTrack } from "./tracks.js";
 import { Car, CAR_TYPES, BASE_TYPES, resolveCollisions, loadCarModel } from "./car.js";
 import { loadSceneryModels } from "./scenery.js";
 import { ItemSystem, ITEMS, ROLL_TIME } from "./items.js";
-import { Room } from "./net.js";
+import { Room, CANCELLED } from "./net.js";
 import { Skids } from "./skids.js";
 import { Coins } from "./coins.js";
 import { Replay, REPLAY_SPEED } from "./replay.js";
@@ -1390,10 +1390,11 @@ function onNetMessage(msg, from) {
 function dropNetCar(id) {
   const car = netCars.get(id);
   if (!car) return;
-  car.gone = true; // אחרון בטבלה, ולא בין המכוניות שאפשר לצפות בהן
+  car.gone = true; // לא בין המכוניות שאפשר לצפות בהן ולא במפה
   if (!car.finished) {
     car.finished = true;
     car.finishTime = Infinity;
+    car.dnf = true; // לא סיים — אחרון בטבלה (מי שסיים לפני שיצא שומר על המקום שלו)
   }
   car.net = null; // בלי החלקה לעבר המצב האחרון
   car.y = -1000;  // מחוץ לעולם: לא נראית ולא מתנגשת
@@ -1511,18 +1512,20 @@ function attachRoom(r) {
   });
 }
 
+let pendingRoom = null; // חדר שעוד מתחבר — אם יוצאים מהמסך בינתיים, סוגרים אותו
 async function createRoom() {
   mpError("");
   saveName();
   $("mpCreate").disabled = true;
   try {
-    const r = new Room();
+    const r = (pendingRoom = new Room());
     await r.create();
+    pendingRoom = null;
     attachRoom(r);
     lobby = { players: [{ id: "host", name: mpName(), color: settings.color, type: settings.type }], track: settings.track, bots: true };
     sendLobby();
   } catch (e) {
-    mpError(e.message);
+    if (e.message !== CANCELLED) mpError(e.message);
   } finally {
     $("mpCreate").disabled = false;
   }
@@ -1535,14 +1538,15 @@ async function joinRoom() {
   saveName();
   $("mpJoin").disabled = true;
   try {
-    const r = new Room();
+    const r = (pendingRoom = new Room());
     await r.join(code);
+    pendingRoom = null;
     attachRoom(r);
     lobby = { players: [], track: settings.track, bots: true };
     renderLobby();
     room.send({ t: "hello", name: mpName(), color: settings.color, type: settings.type });
   } catch (e) {
-    mpError(e.message);
+    if (e.message !== CANCELLED) mpError(e.message);
   } finally {
     $("mpJoin").disabled = false;
   }
@@ -1553,7 +1557,7 @@ async function quickMatch() {
   saveName();
   show("mpStart", true);
   show("mpLobby", false);
-  $("mpRandom").disabled = true;
+  $("mpRandom").disabled = $("mpCreate").disabled = $("mpJoin").disabled = true;
   $("mpRandom").textContent = "מחפשים חדר…";
   try {
     const r = new Room();
@@ -1567,9 +1571,9 @@ async function quickMatch() {
     }
   } catch (e) {
     leaveRoom();
-    mpError(e.message);
+    if (e.message !== CANCELLED) mpError(e.message);
   } finally {
-    $("mpRandom").disabled = false;
+    $("mpRandom").disabled = $("mpCreate").disabled = $("mpJoin").disabled = false;
     $("mpRandom").textContent = "חיפוש משחק";
   }
 }
@@ -1651,6 +1655,8 @@ $("mpCode").addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinRoom();
 });
 $("mpBack").addEventListener("click", () => {
+  pendingRoom?.leave();
+  pendingRoom = null;
   if (room) leaveRoom();
   show("mp", false);
   show("menu", true);

@@ -28,6 +28,7 @@ function peerOptions() {
   return opts;
 }
 
+export const CANCELLED = "בוטל";
 const randomCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
 
 export class Room {
@@ -51,13 +52,23 @@ export class Room {
     this.handlers[type]?.(...args);
   }
 
+  /* פתיחת חיבור לשרת — ואם השחקן יצא בינתיים, סוגרים אותו מיד */
+  async open(Peer, id) {
+    const peer = await openPeer(Peer, id);
+    if (this.closed) {
+      peer.destroy();
+      throw new Error(CANCELLED);
+    }
+    return peer;
+  }
+
   /* יצירת חדר חדש — מנסים קודים עד שמוצאים אחד פנוי */
   async create() {
     const Peer = await loadPeer();
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = randomCode();
       try {
-        this.peer = await openPeer(Peer, PREFIX + code);
+        this.peer = await this.open(Peer, PREFIX + code);
         this.code = code;
         break;
       } catch (e) {
@@ -92,8 +103,9 @@ export class Room {
     const Peer = await loadPeer();
     this.isPublic = true;
     for (let i = 0; i < PUBLIC_ROOMS; i++) {
-      this.peer ||= await openPeer(Peer, undefined);
+      this.peer ||= await this.open(Peer, undefined);
       const result = await this.tryJoin(PUBLIC_PREFIX + i, hello);
+      if (this.closed) throw new Error(CANCELLED);
       if (result === "joined") {
         this.code = String(i);
         return "guest";
@@ -103,7 +115,7 @@ export class Room {
       this.peer.destroy();
       this.peer = null;
       try {
-        this.peer = await openPeer(Peer, PUBLIC_PREFIX + i);
+        this.peer = await this.open(Peer, PUBLIC_PREFIX + i);
       } catch (e) {
         if (e.type === "unavailable-id") {
           i--;
@@ -156,7 +168,7 @@ export class Room {
   /* הצטרפות לחדר קיים לפי קוד */
   async join(code) {
     const Peer = await loadPeer();
-    this.peer = await openPeer(Peer, undefined);
+    this.peer = await this.open(Peer, undefined);
     this.code = code.toUpperCase();
     this.myId = this.peer.id;
     await new Promise((resolve, reject) => {

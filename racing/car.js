@@ -764,7 +764,7 @@ export class Car {
     this.flames.visible = flaming;
     /* מגן: בועה כחולה שקופה סביב המכונית */
     if (this.shield > 0 && !this.bubble) {
-      this.bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+      this.bubble = new THREE.Mesh(bubbleGeo, bubbleMat.clone()); // חומר משלה — ההבהוב של אחת לא עובר לאחרות
       this.bubble.position.y = 0.9;
       this.mesh.add(this.bubble);
     }
@@ -772,7 +772,7 @@ export class Car {
       this.bubble.visible = this.shield > 0;
       const pulse = 1 + Math.sin(performance.now() / 120) * 0.03;
       this.bubble.scale.set(1.7 * pulse, 1.25 * pulse, 2.9 * pulse);
-      bubbleMat.opacity = this.shield < 0.8 ? 0.12 + 0.12 * Math.abs(Math.sin(performance.now() / 70)) : 0.24; // מהבהב לפני שנגמר
+      this.bubble.material.opacity = this.shield < 0.8 ? 0.12 + 0.12 * Math.abs(Math.sin(performance.now() / 70)) : 0.24; // מהבהב לפני שנגמר
     }
     if (this.damageUniform) this.damageUniform.value = this.damage;
     if (this.finish === "rainbow" && this.paintUniform) this.paintUniform.value.setHSL((performance.now() / 6000) % 1, 0.85, 0.5);

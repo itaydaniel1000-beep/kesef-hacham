@@ -895,6 +895,13 @@ body.touch .touch-only-flex { display: flex; }
 #spectateLeave { width: auto; border-radius: 999px; padding: 0 12px; font-size: 1rem; }
 .spectate { width: max-content; max-width: calc(100vw - 32px); white-space: nowrap; }
 #spectateName { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.spectate button { flex-shrink: 0; }
+@media (max-width: 400px) {
+  .spectate { padding: 6px 10px; gap: 6px; }
+  .spectate > b, .spectate .key-hint { display: none; }
+}
+/* הצ'אט בלובי צמוד לתחתית — משאירים לו מקום כדי שלא יסתיר את הכפתורים */
+body:has(.chat.lobby:not(.hidden)) #mp { padding-bottom: 96px; }
 .touch-only-inline { display: none; }
 body.touch .touch-only-inline { display: inline-block; }
 

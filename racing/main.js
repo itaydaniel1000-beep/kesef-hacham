@@ -1559,8 +1559,8 @@ async function quickMatch() {
   show("mpLobby", false);
   $("mpRandom").disabled = $("mpCreate").disabled = $("mpJoin").disabled = true;
   $("mpRandom").textContent = "מחפשים חדר…";
+  const r = new Room();
   try {
-    const r = new Room();
     attachRoom(r);
     lobby = { players: [], track: settings.track, bots: false, public: true };
     const role = await r.quickMatch({ t: "hello", name: mpName(), color: settings.color, type: settings.type });
@@ -1570,7 +1570,7 @@ async function quickMatch() {
       sendLobby();
     }
   } catch (e) {
-    leaveRoom();
+    if (room === r) leaveRoom(); // חיפוש ישן שבוטל לא סוגר חיפוש חדש
     if (e.message !== CANCELLED) mpError(e.message);
   } finally {
     $("mpRandom").disabled = $("mpCreate").disabled = $("mpJoin").disabled = false;

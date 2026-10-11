@@ -68,6 +68,7 @@ export class AbilitySystem {
   /* הפעלה (מקש ק, או בוט). מחזיר כמה מכוניות נפגעו, או false אם אי אפשר עכשיו */
   use(car) {
     if (!this.enabled || car.finished || car.charge < 1) return false;
+    if (car.ability === "jump" && !car.grounded) return false; // באוויר אי אפשר לקפוץ — לא מבזבזים את המד
     car.charge = 0;
     car.chargeFull = 0;
     const hits = this.apply(car, car.ability);

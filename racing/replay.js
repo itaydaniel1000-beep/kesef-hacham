@@ -55,6 +55,7 @@ export class Replay {
       car.groundHeight = lerp(a[15], b[15], f);
       car.grounded = Math.abs(car.y - car.groundHeight) < 0.3;
       if (a[16] !== undefined) car.damage = a[16];
+      car.shield = a[17] || 0;
     });
   }
 }

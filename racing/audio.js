@@ -138,7 +138,27 @@ export class GameAudio {
     this.burst(0.15, { type: "bandpass", freq: 2400, gain: 0.12 });
   }
 
-  /* "טיק" של גלגל מזל — קצר וחד; גבוה יותר כשהגלגל נעצר */
+  /* מגן: צליל עולה ומבריק */
+  shieldUp() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [660, 880, 1320].forEach((f, i) => this.tone(f, t + i * 0.06, 0.3, { type: "sine", gain: 0.09 }));
+  }
+
+  /* EMP: זמזום חשמלי שיורד */
+  emp(strength = 1) {
+    if (!this.ctx) return;
+    this.burst(0.6, { type: "bandpass", from: 4200, to: 300, gain: 0.3 * strength });
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 6; i++) this.tone(2400 - i * 300, t + i * 0.04, 0.05, { type: "sawtooth", gain: 0.04 * strength });
+  }
+
+  /* ערימת שלג: רסס רך */
+  snow() {
+    this.burst(0.45, { type: "highpass", from: 1800, to: 600, gain: 0.3 });
+  }
+
+  /* "טיק" קצר וחד — המד של היכולת התמלא */
   tick(last = false) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

@@ -88,10 +88,10 @@ const CHALLENGES = [
   { id: "podium", text: "סיים בשלישייה הראשונה", test: (r) => r.place <= 3 && r.mode === "race" },
   { id: "win", text: "נצח במירוץ", test: (r) => r.place === 1 && r.mode === "race" },
   { id: "drifts", text: "עשה 10 דריפטים במירוץ אחד", test: (r) => r.stats.drifts >= 10 },
-  { id: "missiles", text: "פגע ב-2 טילים במירוץ אחד", test: (r) => r.stats.missileHits >= 2 },
-  { id: "items", text: "השתמש ב-5 פריטים במירוץ אחד", test: (r) => r.stats.itemsUsed >= 5 },
+  { id: "abilityHits", text: "פגע ב-3 מכוניות עם היכולת במירוץ אחד", test: (r) => r.stats.abilityHits >= 3 },
+  { id: "abilities", text: "הפעל את היכולת 5 פעמים במירוץ אחד", test: (r) => r.stats.abilitiesUsed >= 5 },
   { id: "coins", text: "אסוף 15 מטבעות במירוץ אחד", test: (r) => r.stats.coins >= 15 },
-  { id: "noMine", text: "סיים מירוץ בלי לעלות על מוקש", test: (r) => r.finished && r.mode === "race" && r.stats.minesHit === 0 },
+  { id: "noObstacle", text: "סיים מירוץ בלי לפגוע במכשול", test: (r) => r.finished && r.stats.obstacleHits === 0 },
   { id: "forest", text: "נצח בגראנד-פרי היער", test: (r) => r.place === 1 && r.track === "forest" && r.mode === "race" },
   { id: "desert", text: "נצח בקניון השמש", test: (r) => r.place === 1 && r.track === "desert" && r.mode === "race" },
   { id: "snow", text: "נצח בפסגת הקרח", test: (r) => r.place === 1 && r.track === "snow" && r.mode === "race" },
@@ -124,7 +124,7 @@ export function finishRace(r) {
   coins = Math.round(coins * (0.6 + 0.4 * r.laps)); // מירוץ ארוך יותר — יותר מטבעות
   let xp = Math.round(coins * 1.5);
   /* שיא */
-  /* שיא נפרד לכל מצב: זמן עם פריטים (שיגור, בוסט) לא ימנע שיא ורוח חדשים בנגד השעון */
+  /* שיא נפרד לכל מצב: זמן עם יכולות (טורבו, קפיצה) לא ימנע שיא ורוח חדשים בנגד השעון */
   const key = `${r.track}:${r.laps}:${r.mode}`;
   const newRecord = r.finished && (!profile.records[key] || r.time < profile.records[key]);
   if (newRecord) profile.records[key] = r.time;

@@ -13,34 +13,39 @@ const GRAVITY = 26;
 /* שלושה סוגי מכוניות: כל אחת חזקה במשהו אחר */
 export const CAR_TYPES = {
   speed: {
-    name: "מהירה", maxSpeed: 47, accel: 17, turn: 1.8, grip: 9,
+    name: "מהירה", ability: "turbo", maxSpeed: 47, accel: 17, turn: 1.8, grip: 9,
     stats: { speed: 3, accel: 1, grip: 2 },
     shape: { len: 4.5, width: 2, height: 0.6, cabin: 1.7, wing: 2.4, wingY: 1.5 }
   },
   grip: {
-    name: "אחיזה", maxSpeed: 44, accel: 19, turn: 2.2, grip: 13,
+    name: "אחיזה", ability: "shield", maxSpeed: 44, accel: 19, turn: 2.2, grip: 13,
     stats: { speed: 2, accel: 2, grip: 3 },
     shape: { len: 4.1, width: 2.3, height: 0.7, cabin: 1.9, wing: 1.8, wingY: 1.4 }
   },
   accel: {
-    name: "תאוצה", maxSpeed: 44.5, accel: 25, turn: 1.95, grip: 10,
+    name: "תאוצה", ability: "push", maxSpeed: 44.5, accel: 25, turn: 1.95, grip: 10,
     stats: { speed: 2, accel: 3, grip: 2 },
     shape: { len: 3.7, width: 2.1, height: 0.8, cabin: 1.6, wing: 0, wingY: 0 }
   },
   /* נפתחות בהישגים (profile.js). בינתיים עם הדגמים של המהירה ושל התאוצה */
   super: {
-    name: "מירוץ על", maxSpeed: 48, accel: 22, turn: 2.0, grip: 11, model: "speed",
+    name: "מירוץ על", ability: "jump", maxSpeed: 48, accel: 22, turn: 2.0, grip: 11, model: "speed",
     stats: { speed: 3, accel: 3, grip: 2 },
     shape: { len: 4.6, width: 2.05, height: 0.6, cabin: 1.7, wing: 2.4, wingY: 1.5 }
   },
   turbo: {
-    name: "טורבו", maxSpeed: 47, accel: 19, turn: 2.25, grip: 13, model: "accel",
+    name: "טורבו", ability: "emp", maxSpeed: 47, accel: 19, turn: 2.25, grip: 13, model: "accel",
     stats: { speed: 3, accel: 2, grip: 3 },
     shape: { len: 3.9, width: 2.15, height: 0.8, cabin: 1.6, wing: 0, wingY: 0 }
   }
 };
 export const BASE_TYPES = ["speed", "grip", "accel"];
 
+const bubbleGeo = new THREE.SphereGeometry(1, 32, 16);
+const bubbleMat = new THREE.MeshPhysicalMaterial({
+  color: 0x6fc4ff, emissive: 0x2a7bff, emissiveIntensity: 0.6, transparent: true, opacity: 0.24,
+  roughness: 0.05, metalness: 0, depthWrite: false, side: THREE.DoubleSide
+});
 const wheelGeo = shared(new THREE.CylinderGeometry(0.46, 0.46, 0.4, 20));
 const strutGeo = shared(new THREE.BoxGeometry(0.1, 0.45, 0.22));
 const flameGeo = shared(new THREE.ConeGeometry(0.11, 0.9, 12, 1, true));
@@ -279,16 +284,14 @@ export class Car {
     this.distance = 0;       // מרחק מצטבר לאורך המסלול בדגימות — ממנו נגזרות הקפות ומקומות
     this.finished = false;
     this.finishTime = 0;
-    this.item = null;        // פריט מקופסת הפתעה (items.js)
-    this.itemCharges = 0;
-    this.itemAge = 0;
-    this.history = [];
-    this.historyTimer = 0;
+    this.charge = 0;         // מד היכולת המיוחדת (items.js), בין 0 ל-1
+    this.chargeFull = 0;
+    this.shield = 0;         // שניות שנשארו למגן
+    this.turbo = 0;          // שניות שנשארו לטורבו (בוסט חזק יותר מהרגיל)
     this.net = null;         // מולטיפלייר: המצב האחרון שהגיע מהרשת
     this.damage = 0;         // נזק ויזואלי בלבד, 0 עד 1 — מתאפס בכל מירוץ
-    this.stun = 0;           // שניות שנשארו מפגיעת טיל
-    this.slow = 0;           // שניות שנשארו מברק
-    this.itemRoll = 0;       // גלגל המזל של הקופסה עדיין מסתובב
+    this.stun = 0;           // שניות שנשארו מדחיפה / מחסום
+    this.slow = 0;           // שניות שנשארו מ-EMP / בור
   }
 
   buildMesh(s) {
@@ -536,13 +539,16 @@ export class Car {
       this.nitroOn = false;
     }
     this.padBoost = Math.max(0, this.padBoost - dt);
-    const boosted = this.nitroOn || this.padBoost > 0;
+    this.turbo = Math.max(0, this.turbo - dt);
+    const boosted = this.nitroOn || this.padBoost > 0 || this.turbo > 0;
 
-    /* טיל: כמעט עוצרים לשנייה וחצי. ברק: חצי מהירות לשנייה וחצי */
-    this.stun = Math.max(0, this.stun - dt);
-    this.slow = Math.max(0, this.slow - dt);
+    /* דחיפה / מחסום: כמעט עוצרים לרגע. EMP / בור: חצי מהירות. מגן מבטל את שניהם */
+    this.shield = Math.max(0, this.shield - dt);
+    this.stun = this.shield > 0 ? 0 : Math.max(0, this.stun - dt);
+    this.slow = this.shield > 0 ? 0 : Math.max(0, this.slow - dt);
     const hurt = this.stun > 0 ? 0.12 : this.slow > 0 ? 0.5 : 1;
-    let top = this.maxSpeed * this.topScale * hurt * (offRoad ? 0.48 : 1) * (boosted && hurt === 1 ? 1.28 : 1) * (this.drafting ? 1.04 : 1);
+    const boostTop = this.turbo > 0 ? 1.4 : 1.28; // הטורבו של "מהירה" חזק מבוסט רגיל
+    let top = this.maxSpeed * this.topScale * hurt * (offRoad ? 0.48 : 1) * (boosted && hurt === 1 ? boostTop : 1) * (this.drafting ? 1.04 : 1);
 
     if (this.grounded) {
       if (gas > 0 || boosted) {
@@ -694,12 +700,13 @@ export class Car {
     const r = (v, k = 100) => Math.round(v * k) / k;
     return [r(this.x), r(this.y), r(this.z), r(this.heading, 1000), r(this.moveHeading, 1000), r(this.speed), r(this.distance),
       this.trackIndex, r(this.lateral), this.finished ? 1 : 0, r(this.finishTime), r(this.steer), this.nitroOn ? 1 : 0,
-      r(this.padBoost), this.drifting ? 1 : 0, r(this.groundHeight ?? this.y), r(this.damage)];
+      r(this.padBoost), this.drifting ? 1 : 0, r(this.groundHeight ?? this.y), r(this.damage), r(this.shield)];
   }
 
   netApply(s) {
-    const [x, y, z, heading, moveHeading, speed, distance, trackIndex, lateral, finished, finishTime, steer, nitroOn, padBoost, drifting, ground, damage] = s;
+    const [x, y, z, heading, moveHeading, speed, distance, trackIndex, lateral, finished, finishTime, steer, nitroOn, padBoost, drifting, ground, damage, shield] = s;
     if (damage !== undefined) this.damage = damage;
+    this.shield = shield || 0;
     const first = !this.net;
     this.net = { x, y, z, heading, moveHeading, speed, at: performance.now() };
     /* קפיצה גדולה (שיגור, מוקש, התחלה) — בלי החלקה */
@@ -755,6 +762,18 @@ export class Car {
 
     const flaming = this.nitroOn || this.padBoost > 0.4;
     this.flames.visible = flaming;
+    /* מגן: בועה כחולה שקופה סביב המכונית */
+    if (this.shield > 0 && !this.bubble) {
+      this.bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+      this.bubble.position.y = 0.9;
+      this.mesh.add(this.bubble);
+    }
+    if (this.bubble) {
+      this.bubble.visible = this.shield > 0;
+      const pulse = 1 + Math.sin(performance.now() / 120) * 0.03;
+      this.bubble.scale.set(1.7 * pulse, 1.25 * pulse, 2.9 * pulse);
+      bubbleMat.opacity = this.shield < 0.8 ? 0.12 + 0.12 * Math.abs(Math.sin(performance.now() / 70)) : 0.24; // מהבהב לפני שנגמר
+    }
     if (this.damageUniform) this.damageUniform.value = this.damage;
     if (this.finish === "rainbow" && this.paintUniform) this.paintUniform.value.setHSL((performance.now() / 6000) % 1, 0.85, 0.5);
     this.tailMat.emissiveIntensity = this.input.brake > 0 && this.speed > 0.5 ? 3 : 0.6; // פנסי בלם

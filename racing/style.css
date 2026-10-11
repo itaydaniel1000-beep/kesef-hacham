@@ -681,7 +681,7 @@ kbd { background: rgba(255, 255, 255, .1); color: var(--ink); }
 .pick canvas { background: #151a22; }
 .credits { margin: 12px 0 0; text-align: center; font-size: .72rem; color: var(--ink-soft); direction: rtl; }
 
-/* פריט מקופסת הפתעה: באמצע למעלה, רק כשיש לך אחד */
+/* היכולת של הרכב: באמצע למעלה; הטבעת (--fill) מתמלאת, ומלאה — זוהרת */
 .item-slot {
   position: fixed;
   top: max(64px, 9vh);
@@ -828,8 +828,20 @@ body.touch .touch-only-flex { display: flex; }
 .flash.on { animation: flash .6s ease-out; }
 @keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
 /* גלגל המזל מסתובב */
-.item-slot.rolling { border-color: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, .25), 0 14px 40px rgba(0, 0, 0, .45); }
-.item-slot.rolling .item-icon { filter: blur(.4px); }
+.item-slot { --fill: 0%; border-color: rgba(255, 255, 255, .18); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+.item-slot::before {
+  content: ""; position: absolute; inset: -6px; border-radius: inherit; padding: 4px;
+  background: conic-gradient(#ffc400 var(--fill), rgba(255, 255, 255, .14) 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.item-slot .item-icon { opacity: .45; filter: grayscale(.7); transition: opacity .2s, filter .2s; }
+.item-slot .item-key { opacity: 0; transition: opacity .2s; }
+.item-slot.ready { border-color: rgba(255, 196, 0, .9); animation: ability-ready 1s ease-in-out infinite; }
+.item-slot.ready .item-icon { opacity: 1; filter: none; }
+.item-slot.ready .item-key { opacity: 1; }
+@keyframes ability-ready { 50% { box-shadow: 0 0 0 6px rgba(255, 196, 0, .35), 0 0 34px rgba(255, 196, 0, .55), 0 14px 40px rgba(0, 0, 0, .45); } }
+.ability-text { display: block; margin-top: 4px; font-size: .78rem; opacity: .85; }
 
 /* ===== התקדמות: רמה, XP, מטבעות ===== */
 .profile-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; }

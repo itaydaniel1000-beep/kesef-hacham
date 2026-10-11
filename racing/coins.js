@@ -21,7 +21,8 @@ export class Coins {
     this.spots = [];
     for (let k = 0; k < COUNT; k++) {
       const index = Math.floor(track.count * (0.04 + 0.92 * (k + rand() * 0.6) / COUNT));
-      const lateral = [-4, 0, 4][Math.floor(rand() * 3)];
+      /* לא בתוך מכשול — אם יוצא עליו, המטבע עובר למעבר הפנוי */
+      const lateral = track.obstacles ? track.obstacles.freeLateral(index, [-4, 0, 4][Math.floor(rand() * 3)]) : [-4, 0, 4][Math.floor(rand() * 3)];
       const p = track.points[index], l = track.lefts[index];
       this.spots.push({ x: p.x + l.x * lateral, y: p.y + 1.3, z: p.z + l.z * lateral, taken: false });
     }

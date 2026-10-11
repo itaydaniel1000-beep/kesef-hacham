@@ -1678,6 +1678,9 @@ $("mpBack").addEventListener("click", () => {
   pendingRoom?.leave();
   pendingRoom = null;
   if (room) leaveRoom();
+  /* מסלול שנבחר בלובי — המוסך מסמן אותו ומציג את השיא שלו */
+  markSelected($("trackPicker"), (b) => b.dataset.id === currentTrackId);
+  refreshRecords();
   show("mp", false);
   show("menu", true);
 });

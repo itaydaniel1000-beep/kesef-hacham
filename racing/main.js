@@ -829,6 +829,7 @@ function drawMinimap() {
   mctx.clearRect(0, 0, mini.width, mini.height);
   mctx.drawImage(miniBase, 0, 0);
   for (const car of cars) {
+    if (car.gone) continue;
     const [x, y] = toMini(car.x, car.z);
     mctx.beginPath();
     mctx.arc(x, y, car === player ? 6 : 4.5, 0, Math.PI * 2);
@@ -1344,7 +1345,7 @@ function onNetMessage(msg, from) {
       }, 1500);
     } else if (msg.t === "state") {
       latestStates.set(from, msg.s);
-      netCars.get(from)?.netApply(msg.s);
+      { const c = netCars.get(from); if (c && !c.gone) c.netApply(msg.s); }
     } else if (ITEM_EVENTS.includes(msg.t)) {
       applyItemEvent(msg);
       room.broadcast(msg, from);
@@ -1372,7 +1373,10 @@ function onNetMessage(msg, from) {
   } else if (msg.t === "start") {
     startMultiplayer(msg);
   } else if (msg.t === "states") {
-    for (const [id, st] of msg.list) if (id !== room.myId) netCars.get(id)?.netApply(st);
+    for (const [id, st] of msg.list) {
+      const c = id !== room.myId && netCars.get(id);
+      if (c && !c.gone) c.netApply(st);
+    }
   } else if (ITEM_EVENTS.includes(msg.t)) {
     applyItemEvent(msg);
   } else if (msg.t === "toLobby") {
@@ -1486,6 +1490,8 @@ function attachRoom(r) {
       return mpError("המארח יצא מהחדר");
     }
     if (mpRoster) {
+      /* המכוניות מהרשת היו נתקעות באמצע המסלול — מורידים אותן, ואני ממשיך לבד */
+      for (const id of [...netCars.keys()]) dropNetCar(id);
       room?.leave();
       room = null;
       return;

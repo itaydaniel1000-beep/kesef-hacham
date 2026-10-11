@@ -11,8 +11,8 @@ export const ABILITIES = {
 };
 export const abilityOf = (type) => CAR_TYPES[type]?.ability || "turbo";
 
-const FILL_TIME = 12;      // שניות עד שהמד מתמלא בנהיגה רגילה
-const PASS_BONUS = 0.2;    // עקיפה
+const FILL_TIME = 15;      // שניות עד שהמד מתמלא בנהיגה רגילה
+const PASS_BONUS = 0.08;   // עקיפה (קטן — בבלגן של הזינוק מתחלפים הרבה מקומות)
 const LAND_BONUS = 0.1;    // נחיתה מקפיצה
 const TURBO_TIME = 3;
 const SHIELD_TIME = 4;

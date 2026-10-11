@@ -471,6 +471,12 @@ function buildGarage() {
 
 /* ===== מוסך: רמה, XP, מטבעות ושיא ===== */
 function refreshProfile() {
+  /* מכונית שנפתחה עכשיו (ניצחון שלישי / רמה 10) — מורידים את המנעול בלי לרענן את הדף */
+  for (const b of $("carPicker").children) {
+    if (!b.classList.contains("locked") || !isUnlocked(b.dataset.id)) continue;
+    b.classList.remove("locked");
+    b.querySelector(".lock-text")?.remove();
+  }
   const info = levelInfo();
   $("pfLevel").textContent = `רמה ${info.level}`;
   $("pfXp").style.width = `${Math.round((info.into / info.need) * 100)}%`;
@@ -753,6 +759,7 @@ function updateHud() {
   hudSet("item", item, () => {
     hud.itemSlot.classList.toggle("hidden", !item);
     hud.itemSlot.classList.toggle("rolling", !!rolling);
+    if (!item) roulette.spinning = false; // הפריט נעלם באמצע הסיבוב (סוף מירוץ / התחלה מחדש)
     if (!item || rolling) return;
     if (roulette.spinning) audio.tick(true); // הגלגל נעצר
     roulette.spinning = false;

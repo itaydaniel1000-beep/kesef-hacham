@@ -124,7 +124,8 @@ export function finishRace(r) {
   coins = Math.round(coins * (0.6 + 0.4 * r.laps)); // מירוץ ארוך יותר — יותר מטבעות
   let xp = Math.round(coins * 1.5);
   /* שיא */
-  const key = `${r.track}:${r.laps}`;
+  /* שיא נפרד לכל מצב: זמן עם פריטים (שיגור, בוסט) לא ימנע שיא ורוח חדשים בנגד השעון */
+  const key = `${r.track}:${r.laps}:${r.mode}`;
   const newRecord = r.finished && (!profile.records[key] || r.time < profile.records[key]);
   if (newRecord) profile.records[key] = r.time;
   /* אתגרים */
@@ -145,7 +146,7 @@ export function finishRace(r) {
   return { coins, xp, newRecord, completed, levelUp: after > before ? after : 0 };
 }
 
-export const recordOf = (track, laps) => profile.records[`${track}:${laps}`];
+export const recordOf = (track, laps, mode = "race") => profile.records[`${track}:${laps}:${mode}`];
 
 /* ===== רוח לנגד השעון: דגימות [x, y, z, heading] כל 0.1 שנייה, דחוסות ל-base64 ===== */
 export function saveGhost(track, laps, samples) {

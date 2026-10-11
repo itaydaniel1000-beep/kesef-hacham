@@ -462,6 +462,7 @@ function buildGarage() {
       saveSettings();
       markSelected(mp, (b) => b === btn);
       buildCars();
+      refreshRecords(); // השיא שמוצג הוא של המצב שנבחר
     });
   }
   markSelected(mp, (b) => b.dataset.id === settings.mode);
@@ -477,7 +478,7 @@ function refreshProfile() {
   refreshRecords();
 }
 function refreshRecords() {
-  const rec = recordOf(currentTrackId, settings.laps);
+  const rec = recordOf(currentTrackId, settings.laps, settings.mode);
   const def = TRACKS.find((t) => t.id === currentTrackId);
   $("recordLine").textContent = rec ? `השיא שלך ב${def.name} (${settings.laps === 1 ? "הקפה אחת" : `${settings.laps} הקפות`}): ${formatTime(rec)}` : "";
 }
@@ -1244,7 +1245,15 @@ function applyItemEvent(msg) {
   else if (msg.t === "mine") items.addMine(msg.x, msg.y, msg.z, cars.find((c) => c.netId === msg.owner) || null, msg.id);
   else if (msg.t === "mineHit") items.removeMine(msg.id);
   else if (msg.t === "missile") items.addMissile(msg.id, carByNet(msg.owner), carByNet(msg.target), msg.dist, msg.lateral, msg.speed);
-  else if (msg.t === "missileHit") items.removeMissile(msg.id);
+  else if (msg.t === "missileHit") {
+    /* הפגיעה נבדקה אצל מי שנפגע — כאן מראים את הפיצוץ, ואם הטיל שלי, זה נספר לי */
+    const m = items.missiles.find((mm) => mm.id === msg.id);
+    if (m) {
+      if (m.target) items.fx("boom", m.target, m.mesh.position.clone(), "missile");
+      if (m.owner === player) items.fx("missileHit", player);
+    }
+    items.removeMissile(msg.id);
+  }
   else if (msg.t === "lightning") items.strike(carByNet(msg.owner), msg.dist);
 }
 
@@ -1709,6 +1718,9 @@ function setupGhost() {
     if (!o.isMesh) return;
     o.material = [].concat(o.material).map((m) => {
       const c = m.clone();
+      /* clone לא מעתיק את ה-shader של הצבע — בלעדיו הרוח הייתה בצבעי הטקסטורה המקוריים */
+      c.onBeforeCompile = m.onBeforeCompile;
+      c.customProgramCacheKey = m.customProgramCacheKey;
       c.transparent = true;
       c.opacity = 0.32;
       c.depthWrite = false;

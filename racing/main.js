@@ -766,6 +766,7 @@ function updateHud() {
 function showResults() {
   show("pauseButton", false); // אין מה להשהות במסך הסיום
   $("againButton").textContent = !mpRoster ? "עוד מירוץ" : lobby.public ? "משחק רנדומלי נוסף" : "חזרה לחדר";
+  $("againButton").disabled = false;
   const place = race.placeOf(player);
   const titles = ["ניצחת! 🏆", "מקום שני!", "מקום שלישי!"];
   $("resultTitle").textContent = cars.length === 1 ? "סיימת!" : titles[place - 1] || `מקום ${place} מתוך ${cars.length}`;
@@ -1194,6 +1195,12 @@ function frame(now) {
     audio.engine(player, true, dt);
     /* במולטיפלייר: שידור חוזר רק כשכולם סיימו — אחרת היינו מפסיקים לשלוח את המיקום שלנו */
     if (state === "finished" && !resultsShownAt) show("replayButton", replay.frames.length > 10 && (!mpRoster || cars.every((c) => c.finished)));
+    /* חדר עם קוד: רק המארח מחזיר לחדר, ורק אחרי שכולם סיימו — כדי לא לקטוע מירוץ של מישהו */
+    if (state === "finished" && mpRoster && !lobby.public) {
+      const again = $("againButton");
+      again.disabled = !!room && !(room.isHost && cars.every((c) => c.finished));
+      again.textContent = !room || room.isHost ? "חזרה לחדר" : "מחכים למארח…";
+    }
   }
 
   /* בהשהיה התמונה האחרונה נשארת על המסך — אין טעם לצייר אותה שוב 60 פעמים בשנייה */
@@ -1346,7 +1353,7 @@ function onNetMessage(msg, from) {
     } else if (msg.t === "state") {
       latestStates.set(from, msg.s);
       { const c = netCars.get(from); if (c && !c.gone) c.netApply(msg.s); }
-    } else if (ITEM_EVENTS.includes(msg.t)) {
+    } else if (ITEM_EVENTS.includes(msg.t) && mpRoster) {
       applyItemEvent(msg);
       room.broadcast(msg, from);
     }
@@ -1377,7 +1384,7 @@ function onNetMessage(msg, from) {
       const c = id !== room.myId && netCars.get(id);
       if (c && !c.gone) c.netApply(st);
     }
-  } else if (ITEM_EVENTS.includes(msg.t)) {
+  } else if (ITEM_EVENTS.includes(msg.t) && mpRoster) {
     applyItemEvent(msg);
   } else if (msg.t === "toLobby") {
     backToRoom(false);

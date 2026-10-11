@@ -1208,6 +1208,12 @@ function frame(now) {
       again.disabled = !!room && !(room.isHost && cars.every((c) => c.finished));
       again.textContent = !room || room.isHost ? "חזרה לחדר" : "מחכים למארח…";
     }
+    /* מארח של חדר רנדומלי: היציאה שלו סוגרת את החדר — מחכים שכולם יסיימו */
+    if (state === "finished" && mpRoster && lobby.public && room?.isHost) {
+      const done = cars.every((c) => c.finished);
+      $("againButton").disabled = !done;
+      $("againButton").textContent = done ? "משחק רנדומלי נוסף" : "מחכים שכולם יסיימו…";
+    }
   }
 
   /* בהשהיה התמונה האחרונה נשארת על המסך — אין טעם לצייר אותה שוב 60 פעמים בשנייה */
@@ -1551,8 +1557,8 @@ async function joinRoom() {
   if (code.length < 5) return mpError("הקוד הוא 5 תווים");
   saveName();
   $("mpJoin").disabled = true;
+  const r = (pendingRoom = new Room());
   try {
-    const r = (pendingRoom = new Room());
     await r.join(code);
     pendingRoom = null;
     attachRoom(r);
@@ -1560,7 +1566,7 @@ async function joinRoom() {
     renderLobby();
     room.send({ t: "hello", name: mpName(), color: settings.color, type: settings.type });
   } catch (e) {
-    if (e.message !== CANCELLED) mpError(e.message);
+    if (e.message !== CANCELLED && !r.closed) mpError(e.message);
   } finally {
     $("mpJoin").disabled = false;
   }

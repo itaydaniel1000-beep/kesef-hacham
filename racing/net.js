@@ -174,6 +174,10 @@ export class Room {
     await new Promise((resolve, reject) => {
       const conn = this.peer.connect(PREFIX + this.code, { reliable: true });
       const timer = setTimeout(() => reject(new Error("החדר לא נמצא. בדקו את הקוד")), 9000);
+      this.cancelJoin = () => {
+        clearTimeout(timer);
+        reject(new Error(CANCELLED));
+      };
       const fail = (e) => {
         clearTimeout(timer);
         reject(new Error(e?.type === "peer-unavailable" ? "החדר לא נמצא. בדקו את הקוד" : "החיבור נכשל"));
@@ -216,6 +220,7 @@ export class Room {
 
   leave() {
     this.closed = true;
+    this.cancelJoin?.(); // הצטרפות שעוד מחכה — נגמרת מיד
     try {
       this.peer?.destroy();
     } catch {

@@ -215,6 +215,7 @@ function useTrack(id) {
   items = itemSystems.get(track);
   if (!coinSystems.has(track)) coinSystems.set(track, new Coins(track));
   coins = coinSystems.get(track);
+  audio.setTrackMusic(track.def.id); // לכל מסלול המוזיקה שלו
   const th = track.theme;
   const u = sky.material.uniforms;
   u.turbidity.value = th.turbidity;

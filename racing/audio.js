@@ -11,7 +11,12 @@ const REDLINE = 6200;
 
 const MUSIC_VOLUME = 0.35;
 /* אורך הלולאה במוזיקה: 32 תיבות ב-128 BPM */
-const MUSIC_LOOP = (32 * 4 * 60) / 128;
+/* מוזיקה לכל מסלול: הקובץ וה-BPM שלו (הלולאה היא 32 תיבות של 4 פעמות) */
+const MUSIC = {
+  forest: { file: "music.mp3", bpm: 128 },
+  desert: { file: "music-desert.mp3", bpm: 110 },
+  snow: { file: "music-snow.mp3", bpm: 96 }
+};
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);
 
 export class GameAudio {
@@ -19,6 +24,9 @@ export class GameAudio {
     this.ctx = null;
     this.muted = false;
     this.musicOn = true;
+    this.musicTrack = "forest"; // איזה קטע מתנגן (לפי המסלול)
+    this.musicBuffers = new Map();
+    this.musicSource = null;
     this.musicVolume = 1; // מסך ההגדרות: עוצמת מוזיקה ועוצמת אפקטים, 0 עד 1
     this.sfxVolume = 1;
     this.gear = 1;
@@ -347,11 +355,24 @@ export class GameAudio {
   }
 
   /* מוזיקת הרקע: קובץ מוכן (tools/make-music.py), מתנגן בלולאה של 32 תיבות בדיוק */
+  /* מחליפים קטע לפי המסלול; אם הקול עוד לא התחיל — רק זוכרים מה לנגן */
+  setTrackMusic(id) {
+    if (!MUSIC[id] || id === this.musicTrack) return;
+    this.musicTrack = id;
+    if (this.ctx) this.startMusic();
+  }
+
   async startMusic() {
     const ctx = this.ctx;
+    const id = this.musicTrack;
+    const spec = MUSIC[id];
     try {
-      const res = await fetch("music.mp3");
-      const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      if (!this.musicBuffers.has(id)) {
+        const res = await fetch(spec.file);
+        this.musicBuffers.set(id, await ctx.decodeAudioData(await res.arrayBuffer()));
+      }
+      if (id !== this.musicTrack) return; // בזמן הטעינה כבר עברו למסלול אחר
+      const buffer = this.musicBuffers.get(id);
       /* מקודד ה-MP3 מוסיף שקט קצר בהתחלה; מתחילים את הלולאה מהצליל הראשון */
       const data = buffer.getChannelData(0);
       let first = 0;
@@ -361,11 +382,24 @@ export class GameAudio {
       src.buffer = buffer;
       src.loop = true;
       src.loopStart = start;
-      src.loopEnd = Math.min(buffer.duration, start + MUSIC_LOOP);
-      src.connect(this.musicBus);
+      src.loopEnd = Math.min(buffer.duration, start + (32 * 4 * 60) / spec.bpm);
+      /* מעבר רך: הקטע הקודם נחלש בשנייה, החדש מתחזק */
+      const fade = ctx.createGain();
+      const t = ctx.currentTime;
+      fade.gain.setValueAtTime(0, t);
+      fade.gain.linearRampToValueAtTime(1, t + 1);
+      src.connect(fade).connect(this.musicBus);
       src.start(0, start);
+      const old = this.musicSource;
+      if (old) {
+        old.fade.gain.setValueAtTime(old.fade.gain.value, t);
+        old.fade.gain.linearRampToValueAtTime(0, t + 1);
+        old.src.stop(t + 1.05);
+      }
+      this.musicSource = { src, fade };
     } catch {
       /* אין קובץ או שהדפדפן לא מפענח — המשחק ממשיך בלי מוזיקה */
     }
   }
+
 }

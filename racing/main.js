@@ -1932,7 +1932,10 @@ function openChat() {
   $("chat").style.pointerEvents = "auto";
   $("chatInput").focus();
 }
+/* בטלפון אפשר לצאת מהצ'אט בנגיעה במקום אחר — גם אז ההודעות חוזרות להיות "שקופות" למגע */
+$("chatInput").addEventListener("blur", () => ($("chat").style.pointerEvents = ""));
 function closeChat() {
+  $("chat").style.pointerEvents = ""; // אחרת ההודעות השקופות חוסמות את כפתור המבט לאחור
   $("chatInput").value = "";
   $("chatInput").blur();
   show("chatForm", !!room && !mpRoster && !$("mp").classList.contains("hidden"));

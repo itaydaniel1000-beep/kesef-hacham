@@ -539,6 +539,7 @@ function startRace() {
   show("results", false);
   show("pause", false);
   show("hud", true);
+  show("replayBar", false);
   show("pauseButton", !mpRoster);
   show("touch", isTouch);
   show("countdown", true);
@@ -555,6 +556,7 @@ function syncAudio() {
 
 function toGarage() {
   state = "menu";
+  show("replayBar", false);
   refreshProfile();
   if (ghost) ghost.car.mesh.visible = false;
   pausedFrom = null;
@@ -606,7 +608,7 @@ function resume() {
 $("startButton").addEventListener("click", startRace);
 $("againButton").addEventListener("click", () => (mpRoster ? backToRoom(true) : startRace()));
 $("garageButton").addEventListener("click", () => {
-  if (room) leaveRoom();
+  if (room || mpRoster) leaveRoom(); // גם אם המארח כבר יצא — חוזרים למכוניות של משחק רגיל
   toGarage();
 });
 $("pauseButton").addEventListener("click", pause);
@@ -1447,6 +1449,16 @@ function attachRoom(r) {
   });
   room.on("hostLeft", () => {
     /* באמצע מירוץ או במסך התוצאות: ממשיכים לבד, בלי חיבור */
+    /* צופה שהמארח יצא: אין מירוץ לראות — חוזרים למסך הכניסה עם הודעה */
+    if (spectating) {
+      leaveRoom();
+      toGarage();
+      show("menu", false);
+      show("mp", true);
+      show("mpStart", true);
+      show("mpLobby", false);
+      return mpError("המארח יצא מהחדר");
+    }
     if (mpRoster) {
       room?.leave();
       room = null;
@@ -1583,7 +1595,10 @@ function backToRoom(fromHere) {
     return quickMatch();
   }
   if (fromHere && room?.isHost) room.broadcast({ t: "toLobby" });
-  if (!room) return toGarage();
+  if (!room) {
+    leaveRoom(); // המארח יצא באמצע: מנקים את מצב המולטיפלייר לפני המוסך
+    return toGarage();
+  }
   stopSpectating();
   mpRoster = null;
   buildCars();
@@ -1902,7 +1917,7 @@ function startSpectating(msg) {
   raceLaps = msg.laps || 1;
   settings.track = currentTrackId = msg.track;
   useTrack(msg.track);
-  buildRosterCars(msg.roster); // אני לא ברשימה — כל המכוניות מגיעות מהרשת
+  buildCars(msg.roster); // אני לא ברשימה — כל המכוניות מגיעות מהרשת (והמכוניות של המוסך מוסרות)
   /* "שחקן" דמה שלא נוסע ולא מצויר, כדי שכל השאר יעבוד כרגיל */
   player = new Car({ name: "צופה", color: settings.color, type: "grip" });
   player.placeAt(track, 0, 0);

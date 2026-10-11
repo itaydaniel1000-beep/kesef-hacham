@@ -666,7 +666,7 @@ export class Car {
       if (d < -track.count / 2) d += track.count;
       if (d >= -2 && d <= 2 && Math.abs(this.lateral - pad.lateral) < 2.6) {
         if (this.padBoost < 0.6) this.events.push("pad");
-        this.padBoost = 1.1;
+        this.padBoost = Math.max(this.padBoost, 1.1); // לא מקצרים בוסט ארוך (פריט ⚡) שכבר פועל
       }
     }
   }

@@ -539,6 +539,7 @@ function startRace() {
   items.reset(cars);
   items.net = mpRoster ? abilityNet : null;
   items.enabled = settings.mode !== "trial" || !!mpRoster;
+  document.querySelector(".touch-item").classList.toggle("hidden", !items.enabled); // בנגד השעון אין יכולות
   coins.reset();
   coins.update(0, null, items.enabled); // המטבעות מתעדכנים כבר בספירה לאחור
   stats = newStats();
@@ -613,6 +614,7 @@ function resume() {
   if (state !== "paused") return;
   state = pausedFrom;
   pausedFrom = null;
+  input.takeItem(); // ק שנלחץ בתפריט ההשהיה לא מפעיל את היכולת ברגע החזרה
   dropFocus();
   syncAudio();
   show("pause", false);

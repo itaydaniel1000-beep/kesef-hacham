@@ -520,6 +520,7 @@ function startRace() {
   items.net = mpRoster ? itemNet : null;
   items.enabled = settings.mode !== "trial" || !!mpRoster;
   coins.reset();
+  coins.update(0, null, items.enabled); // המטבעות מתעדכנים כבר בספירה לאחור
   stats = newStats();
   wasDrifting = false;
   rewards = null;
@@ -561,6 +562,7 @@ function toGarage() {
   if (ghost) ghost.car.mesh.visible = false;
   pausedFrom = null;
   gridUp();
+  markSelected($("trackPicker"), (b) => b.dataset.id === currentTrackId);
   syncAudio();
   hudSet("lines", 0, (v) => (hud.speedlines.style.opacity = v));
   show("results", false);
@@ -777,7 +779,7 @@ function showResults() {
     li.innerHTML = `<span class="pos">${i + 1}</span>
       <span class="swatch" style="background:${hex(car.color)}"></span>
       <span class="name"></span>
-      <span class="time">${car.finished ? "" : "~"}${formatTime(t)}</span>`;
+      <span class="time">${t === Infinity ? "יצא" : (car.finished ? "" : "~") + formatTime(t)}</span>`;
     li.querySelector(".name").textContent = car.name;
     list.appendChild(li);
   });
@@ -1143,7 +1145,7 @@ function step(dt) {
     const mode = mpRoster ? "race" : settings.mode;
     rewards = finishRace({
       place: race.placeOf(player), finished: true, stats, track: track.def.id, laps: race.laps,
-      level: settings.level, mode, time: player.finishTime
+      level: mpRoster ? mpLevel : settings.level, mode, time: player.finishTime
     });
     if (rewards.newRecord && mode === "trial") saveGhost(track.def.id, race.laps, ghostRec.samples);
   }
@@ -1375,7 +1377,22 @@ function onNetMessage(msg, from) {
     applyItemEvent(msg);
   } else if (msg.t === "toLobby") {
     backToRoom(false);
+  } else if (msg.t === "gone") {
+    dropNetCar(msg.id);
   }
+}
+
+/* שחקן שהתנתק באמצע מירוץ: המכונית שלו נעלמת ולא מחכים שיסיים */
+function dropNetCar(id) {
+  const car = netCars.get(id);
+  if (!car) return;
+  if (!car.finished) {
+    car.finished = true;
+    car.finishTime = Infinity; // אחרון בטבלה
+  }
+  car.net = null; // בלי החלקה לעבר המצב האחרון
+  car.y = -1000;  // מחוץ לעולם: לא נראית ולא מתנגשת
+  car.mesh.visible = false;
 }
 
 function sendLobby() {
@@ -1439,12 +1456,19 @@ function saveName() {
   }
 }
 
+/* סגירת הלשונית: סוגרים את החיבורים מיד, כדי שהאחרים יידעו שיצאנו (ולא יחכו לניתוק של הדפדפן) */
+addEventListener("pagehide", () => room?.leave());
+
 function attachRoom(r) {
   room = r;
   room.on("message", onNetMessage);
   room.on("left", (id) => {
     lobby.players = lobby.players.filter((p) => p.id !== id);
     latestStates.delete(id);
+    if (mpRoster) {
+      room.broadcast({ t: "gone", id });
+      dropNetCar(id);
+    }
     sendLobby();
   });
   room.on("hostLeft", () => {
@@ -1574,8 +1598,10 @@ function hostStart() {
   startMultiplayer(msg);
 }
 
+let mpLevel = "normal"; // הקושי שהמארח בחר — הוא שקובע לפרסים ולאתגרים
 function startMultiplayer(msg) {
   mpRoster = msg.roster;
+  mpLevel = msg.level || settings.level;
   raceLaps = msg.laps || 1;
   latestStates.clear();
   settings.track = currentTrackId = msg.track;
@@ -1604,6 +1630,7 @@ function backToRoom(fromHere) {
   buildCars();
   toGarage();
   openMultiplayer();
+  if (room.isHost) sendLobby(); // מי שנכנס באמצע המירוץ מופיע עכשיו אצל כולם
 }
 
 $("mpButton").addEventListener("click", openMultiplayer);
@@ -1914,9 +1941,11 @@ let spectateIndex = 0;
 function startSpectating(msg) {
   spectating = true;
   mpRoster = msg.roster;
+  mpLevel = msg.level || settings.level;
   raceLaps = msg.laps || 1;
   settings.track = currentTrackId = msg.track;
   useTrack(msg.track);
+  setupGhost(); // רוח ישנה מנגד השעון לא נכנסת למירוץ של אחרים
   buildCars(msg.roster); // אני לא ברשימה — כל המכוניות מגיעות מהרשת (והמכוניות של המוסך מוסרות)
   /* "שחקן" דמה שלא נוסע ולא מצויר, כדי שכל השאר יעבוד כרגיל */
   player = new Car({ name: "צופה", color: settings.color, type: "grip" });
@@ -1931,11 +1960,12 @@ function startSpectating(msg) {
   items.net = itemNet;
   items.enabled = true;
   coins.reset();
+  coins.update(0, null, items.enabled); // המטבעות מתעדכנים כבר בספירה לאחור
   stats = newStats();
   rewards = { coins: 0, xp: 0, completed: [] }; // לצופה אין פרסים
   state = "race";
   countdown = 0;
-  show("hud", true);
+  show("hud", false); // הלוח של הצופה עצמו ריק — מציגים רק את פס הצפייה
   show("pauseButton", false);
   show("touch", false);
   show("countdown", false);
@@ -1956,6 +1986,10 @@ function spectateTarget() {
   $("spectateName").textContent = `${spectateIndex + 1}. ${car.name}`;
   return car;
 }
+$("spectateLeave").addEventListener("click", () => {
+  leaveRoom();
+  toGarage();
+});
 $("spectatePrev").addEventListener("click", () => spectateIndex++);
 $("spectateNext").addEventListener("click", () => spectateIndex--);
 
@@ -2060,6 +2094,7 @@ window.__race = {
   get state() { return state; },
   get drivers() { return drivers; },
   get race() { return race; },
+  get room() { return room; },
   get player() { return player; },
   get cars() { return cars; },
   get track() { return track; },

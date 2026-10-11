@@ -1552,6 +1552,7 @@ async function createRoom() {
 }
 
 async function joinRoom() {
+  if ($("mpJoin").disabled || room) return; // Enter כפול / בזמן חיפוש — לא מצטרפים פעמיים
   mpError("");
   const code = $("mpCode").value.trim().toUpperCase();
   if (code.length < 5) return mpError("הקוד הוא 5 תווים");

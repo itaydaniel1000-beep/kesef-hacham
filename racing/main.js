@@ -507,6 +507,7 @@ function refreshRecords() {
 
 const input = new Input();
 input.bindTouch($("touch"));
+input.bindWheel($("wheel"));
 /* מכשיר מגע = מצביע "גס" (אצבע). מחשב נייד עם מסך מגע ועכבר נשאר עם מקלדת */
 const isTouch = matchMedia("(pointer: coarse)").matches;
 if (isTouch) document.body.classList.add("touch");

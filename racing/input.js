@@ -1,4 +1,7 @@
-/* ===== קלט: מקלדת וכפתורי מגע, ממופים לאותו מצב ===== */
+/* ===== קלט: מקלדת, ובטלפון הגה מסתובב ודוושות — ממופים לאותו מצב ===== */
+
+const WHEEL_LOCK = 120; // כמה מעלות לכל צד עד היגוי מלא
+const WHEEL_DEAD = 4;   // סיבוב קטן מזה לא נחשב
 
 const KEYS = {
   ArrowUp: "gas", KeyW: "gas",
@@ -13,7 +16,9 @@ const KEYS = {
 export class Input {
   constructor() {
     this.keys = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, look: false };
-    this.touch = { gas: false, brake: false, left: false, right: false, drift: false, nitro: false, item: false, look: false };
+    this.touch = { gas: false, brake: false, drift: false, nitro: false, item: false, look: false };
+    this.wheelAngle = 0;  // זווית ההגה במעלות (חיובי = עם כיוון השעון = ימינה)
+    this.wheelEl = null;
     this.capture = false; // main.js מדליק את זה בזמן מירוץ
 
     this.itemPressed = false;
@@ -45,6 +50,49 @@ export class Input {
     for (const k in this.keys) this.keys[k] = false;
     for (const k in this.touch) this.touch[k] = false;
     for (const btn of this.buttons || []) btn.classList.remove("active");
+    this.setWheel(0);
+  }
+
+  setWheel(angle) {
+    this.wheelAngle = angle;
+    if (this.wheelEl) this.wheelEl.style.transform = `rotate(${angle}deg)`;
+  }
+
+  /* הגה: האצבע תופסת אותו ומסובבת סביב המרכז; כשעוזבים הוא חוזר לאמצע */
+  bindWheel(el) {
+    this.wheelEl = el;
+    let pointer = null, lastAngle = 0;
+    const fingerAngle = (e) => {
+      const r = el.getBoundingClientRect();
+      return (Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180) / Math.PI;
+    };
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (pointer !== null) return;
+      pointer = e.pointerId;
+      el.setPointerCapture?.(e.pointerId);
+      lastAngle = fingerAngle(e);
+      el.classList.add("held");
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== pointer) return;
+      const a = fingerAngle(e);
+      let d = a - lastAngle;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      lastAngle = a;
+      this.setWheel(Math.max(-WHEEL_LOCK, Math.min(WHEEL_LOCK, this.wheelAngle + d)));
+    });
+    const off = (e) => {
+      if (e.pointerId !== pointer) return;
+      pointer = null;
+      el.classList.remove("held");
+      this.setWheel(0);
+    };
+    el.addEventListener("pointerup", off);
+    el.addEventListener("pointercancel", off);
+    el.addEventListener("lostpointercapture", off);
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   bindTouch(root) {
@@ -84,11 +132,12 @@ export class Input {
 
   read() {
     const k = this.keys, t = this.touch;
-    const left = k.left || t.left, right = k.right || t.right;
+    const a = this.wheelAngle;
+    const wheel = Math.abs(a) < WHEEL_DEAD ? 0 : -(a - Math.sign(a) * WHEEL_DEAD) / (WHEEL_LOCK - WHEEL_DEAD);
     return {
       gas: k.gas || t.gas ? 1 : 0,
       brake: k.brake || t.brake ? 1 : 0,
-      steer: (left ? 1 : 0) - (right ? 1 : 0),
+      steer: Math.max(-1, Math.min(1, (k.left ? 1 : 0) - (k.right ? 1 : 0) + wheel)),
       drift: k.drift || t.drift ? 1 : 0,
       nitro: k.nitro || t.nitro ? 1 : 0
     };

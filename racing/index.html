@@ -49,16 +49,34 @@
   <!-- ===== כפתורי מגע ===== -->
   <div id="touch" class="hidden" aria-hidden="true">
     <button class="touch-btn touch-look" data-key="look" aria-label="מבט אחורה">↺</button>
-    <div class="touch-group touch-steer">
-      <button class="touch-btn" data-key="left">◀</button>
-      <button class="touch-btn" data-key="right">▶</button>
+    <!-- הגה: מסובבים עם האצבע, והוא חוזר לאמצע כשעוזבים -->
+    <div id="wheel" class="touch-wheel" aria-label="הגה">
+      <svg viewBox="-100 -100 200 200" aria-hidden="true">
+        <defs>
+          <radialGradient id="wheelHub" cx="40%" cy="35%" r="70%">
+            <stop offset="0" stop-color="#4a4f59"/><stop offset="1" stop-color="#15171c"/>
+          </radialGradient>
+          <linearGradient id="wheelRim" x1="0" y1="-1" x2="0" y2="1" gradientUnits="objectBoundingBox">
+            <stop offset="0" stop-color="#3a3e46"/><stop offset=".5" stop-color="#1b1d22"/><stop offset="1" stop-color="#2c2f36"/>
+          </linearGradient>
+        </defs>
+        <path d="M-80 4 L-24 10 L-20 26 L-74 30 Z M80 4 L24 10 L20 26 L74 30 Z M-14 26 L14 26 L10 80 L-10 80 Z" fill="#24272e" stroke="#0c0d10" stroke-width="2"/>
+        <circle r="84" fill="none" stroke="url(#wheelRim)" stroke-width="22"/>
+        <circle r="84" fill="none" stroke="#111317" stroke-width="22" stroke-dasharray="5 9" opacity=".35"/>
+        <circle r="95" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5"/>
+        <circle r="73" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1.5"/>
+        <rect x="-5" y="-96" width="10" height="23" rx="2" fill="#e8322a"/>
+        <circle r="27" fill="url(#wheelHub)" stroke="#0c0d10" stroke-width="2"/>
+        <circle r="10" fill="none" stroke="#c9ced8" stroke-width="2.5"/>
+        <circle r="4" fill="#e8322a"/>
+      </svg>
     </div>
     <div class="touch-group touch-pedals">
-      <button class="touch-btn touch-brake" data-key="brake">בלם</button>
+      <button class="touch-pedal touch-brake" data-key="brake"><span>בלם</span></button>
       <div class="touch-col">
         <button class="touch-btn touch-item" data-key="item">יכולת</button>
         <button class="touch-btn touch-nitro" data-key="nitro">טורבו</button>
-        <button class="touch-btn touch-gas" data-key="gas">גז</button>
+        <button class="touch-pedal touch-gas" data-key="gas"><span>גז</span></button>
       </div>
     </div>
   </div>

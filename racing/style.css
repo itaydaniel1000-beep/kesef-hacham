@@ -995,7 +995,11 @@ body.touch .touch-only-inline { display: inline-block; }
 }
 /* טלפון לרוחב: נמוך יותר */
 @media (max-height: 420px) {
-  .touch-wheel { width: 124px; height: 124px; }
-  .touch-pedal.touch-gas { height: 100px; }
-  .touch-pedal.touch-brake { height: 80px; }
+  .touch-wheel { width: 104px; height: 104px; }
+  .touch-pedal.touch-gas { height: 92px; }
+  .touch-pedal.touch-brake { height: 74px; }
+  /* המפה קטנה יותר, כדי שההגה לא יסתיר אותה כשסרגל הדפדפן תופס מקום */
+  body.touch #minimap { width: 84px; height: 84px; }
+  /* היכולת והטורבו לצד הגז ולא מעליו — אחרת הם עולים עד לוח המקום למעלה */
+  .touch-col { flex-direction: row; align-items: flex-end; }
 }

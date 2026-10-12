@@ -87,7 +87,7 @@ function saveSettings() {
 /* ---------- סצנה ---------- */
 
 const canvas = $("scene");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true }); // stencil: הבורות במדבר
 const coarse = matchMedia("(pointer: coarse)").matches;
 renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
@@ -507,7 +507,6 @@ function refreshRecords() {
 
 const input = new Input();
 input.bindTouch($("touch"));
-input.bindWheel($("wheel"));
 /* מכשיר מגע = מצביע "גס" (אצבע). מחשב נייד עם מסך מגע ועכבר נשאר עם מקלדת */
 const isTouch = matchMedia("(pointer: coarse)").matches;
 if (isTouch) document.body.classList.add("touch");

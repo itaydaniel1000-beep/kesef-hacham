@@ -930,20 +930,7 @@ body.touch .touch-only-inline { display: inline-block; }
 #replayFill { height: 100%; width: 0; background: var(--brand); }
 .replay-bar .secondary-button { padding: 6px 12px; white-space: nowrap; }
 
-/* ===== הגה ודוושות בטלפון ===== */
-.touch-wheel {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  touch-action: none;
-  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .5));
-  transition: transform .2s cubic-bezier(.3, 1.4, .5, 1); /* חוזר לאמצע עם קפיצה קטנה */
-  -webkit-user-select: none;
-  user-select: none;
-}
-.touch-wheel.held { transition: none; } /* כשמחזיקים — זז בדיוק עם האצבע */
-.touch-wheel svg { width: 100%; height: 100%; display: block; pointer-events: none; }
-
+/* ===== דוושות בטלפון ===== */
 .touch-pedal {
   position: relative;
   border: none;
@@ -988,18 +975,41 @@ body.touch .touch-only-inline { display: inline-block; }
 }
 .touch-pedal.active::after { background: #fff; }
 
-@media (max-width: 360px) {
-  .touch-wheel { width: 128px; height: 128px; }
-  .touch-pedal.touch-gas { width: 56px; height: 108px; }
-  .touch-pedal.touch-brake { width: 66px; height: 84px; }
-}
-/* טלפון לרוחב: נמוך יותר */
+/* ===== בטלפון: הכול קטן יותר, כדי לא להסתיר את הכביש ===== */
+body.touch .hud-row { gap: 5px; top: max(8px, env(safe-area-inset-top)); left: 8px; right: 8px; }
+body.touch .chip { min-width: 52px; padding: 2px 8px 3px; border-radius: 10px; }
+body.touch .chip small { font-size: .62rem; }
+body.touch .chip strong { font-size: 1rem; }
+body.touch .hud-buttons { gap: 5px; }
+body.touch .chip-button { font-size: .95rem; padding: 2px 8px; }
+body.touch #minimap { top: calc(max(8px, env(safe-area-inset-top)) + 50px); left: 8px; width: 84px; height: 84px; border-radius: 10px; }
+body.touch .item-slot { width: 54px; height: 54px; top: calc(max(8px, env(safe-area-inset-top)) + 54px); border-radius: 14px; }
+body.touch .item-icon { font-size: 1.8rem; }
+body.touch #countdown { font-size: clamp(2.2rem, 10vw, 3.4rem); min-width: 90px; padding: 2px 18px; border-radius: 16px; }
+body.touch .speedo { padding: 2px 12px; }
+body.touch .speedo strong { font-size: 1.25rem; }
+body.touch .nitro { padding: 2px 8px; }
+body.touch .nitro-bar { width: 84px; height: 9px; }
+body.touch .nitro-label { font-size: .7rem; }
+body.touch .dash { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 100px); gap: 4px; }
+
+body.touch #touch { padding: 0 10px; bottom: max(10px, env(safe-area-inset-bottom)); }
+body.touch .touch-group { gap: 8px; }
+body.touch .touch-col { gap: 7px; }
+body.touch .touch-btn { width: 58px; height: 58px; font-size: 1.15rem; }
+body.touch .touch-nitro, body.touch .touch-item { width: 44px; height: 44px; font-size: .68rem; }
+body.touch .touch-look { width: 36px; height: 36px; font-size: 1rem; bottom: 76px; }
+body.touch .touch-pedal.touch-gas { width: 50px; height: 92px; }
+body.touch .touch-pedal.touch-brake { width: 58px; height: 70px; }
+body.touch .touch-pedal span { font-size: .72rem; bottom: 4px; }
+
+/* טלפון לרוחב: עוד יותר נמוך, והיכולת והטורבו לצד הגז ולא מעליו */
 @media (max-height: 420px) {
-  .touch-wheel { width: 104px; height: 104px; }
-  .touch-pedal.touch-gas { height: 92px; }
-  .touch-pedal.touch-brake { height: 74px; }
-  /* המפה קטנה יותר, כדי שההגה לא יסתיר אותה כשסרגל הדפדפן תופס מקום */
-  body.touch #minimap { width: 84px; height: 84px; }
-  /* היכולת והטורבו לצד הגז ולא מעליו — אחרת הם עולים עד לוח המקום למעלה */
-  .touch-col { flex-direction: row; align-items: flex-end; }
+  body.touch #minimap { width: 68px; height: 68px; }
+  body.touch .touch-btn { width: 50px; height: 50px; }
+  body.touch .touch-nitro, body.touch .touch-item { width: 40px; height: 40px; }
+  body.touch .touch-pedal.touch-gas { width: 46px; height: 76px; }
+  body.touch .touch-pedal.touch-brake { width: 54px; height: 60px; }
+  body.touch .touch-col { flex-direction: row; align-items: flex-end; }
+  body.touch .dash { bottom: max(10px, env(safe-area-inset-bottom)); }
 }

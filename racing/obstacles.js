@@ -74,6 +74,22 @@ function materials() {
     barrier: new THREE.MeshStandardMaterial({ map: stripeTex(), roughness: 0.78, metalness: 0 }),
     pit: new THREE.MeshStandardMaterial({ map: pitTex(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }),
     rim: new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 1 }),
+    /* בור אמיתי: הפתח מסמן את עצמו ב-stencil, ובתוכו מציירים קירות ורצפה עמוקים — "מתחת" לכביש */
+    pitMask: new THREE.MeshBasicMaterial({
+      colorWrite: false, depthWrite: false,
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp
+    }),
+    pitWall: new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 1, side: THREE.BackSide, depthTest: false, depthWrite: false,
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc,
+      stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
+    }),
+    pitFloor: new THREE.MeshStandardMaterial({
+      color: 0x2a1b10, roughness: 1, depthTest: false, depthWrite: false,
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc,
+      stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
+    }),
+    stone: new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.95, flatShading: true }),
     snow: new THREE.MeshPhysicalMaterial({ color: 0xf6f9ff, roughness: 0.82, sheen: 0.6, sheenColor: 0xbfd8ff, emissive: 0x1a2533, emissiveIntensity: 0.25 })
   };
   return mats;
@@ -153,16 +169,48 @@ export class Obstacles {
           row.pieces.push({ lat, along: 0, halfLat: w / 2, halfAlong: 0.42, height: 1.0, shape: "box" });
         }
       } else if (this.kind === "pit") {
-        /* בור אחד אליפטי לכל הרוחב החסום */
-        const halfLat = (b - a) / 2, halfAlong = 2.3, lat = (a + b) / 2;
-        const disk = place(new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), m.pit), lat);
-        disk.scale.set(halfLat * 1.12, 1, halfAlong * 1.12);
-        disk.position.y += 0.02;
-        const rim = place(new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 6, 48).rotateX(Math.PI / 2), m.rim), lat);
-        rim.scale.set(halfLat, 1.4, halfAlong);
+        /* בור אליפטי עמוק לכל הרוחב החסום: חול כהה מסביב, שפה מוגבהת ואבנים, וקירות שיורדים למטה */
+        const halfLat = (b - a) / 2, halfAlong = 2.4, lat = (a + b) / 2, depth = 1.6;
+        const spray = place(new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), m.pit), lat);
+        spray.scale.set(halfLat * 1.5, 1, halfAlong * 1.6);
+        spray.position.y += 0.015;
+        const mask = place(new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), m.pitMask), lat);
+        mask.scale.set(halfLat, 1, halfAlong);
+        mask.position.y += 0.03;
+        mask.renderOrder = 2;
+        const wallGeo = new THREE.CylinderGeometry(1, 0.62, depth, 48, 6, true).translate(0, -depth / 2, 0);
+        const colors = [];
+        const wp = wallGeo.attributes.position;
+        for (let k = 0; k < wp.count; k++) {
+          const f = Math.min(1, -wp.getY(k) / depth); // 0 למעלה, 1 בתחתית
+          const n = 0.9 + 0.2 * Math.sin(k * 12.9898);
+          colors.push((0.62 - 0.5 * f) * n, (0.45 - 0.37 * f) * n, (0.28 - 0.23 * f) * n);
+        }
+        wallGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        const wall = place(new THREE.Mesh(wallGeo, m.pitWall), lat);
+        wall.scale.set(halfLat, 1, halfAlong);
+        wall.position.y += 0.03;
+        wall.renderOrder = 3;
+        const floor = place(new THREE.Mesh(new THREE.CircleGeometry(0.62, 40).rotateX(-Math.PI / 2).translate(0, -depth, 0), m.pitFloor), lat);
+        floor.scale.set(halfLat, 1, halfAlong);
+        floor.position.y += 0.03;
+        floor.renderOrder = 3;
+        /* שפה של חול שנערם מסביב */
+        const rim = place(new THREE.Mesh(new THREE.TorusGeometry(1, 0.13, 8, 56).rotateX(Math.PI / 2), m.rim), lat);
+        rim.scale.set(halfLat + 0.12, 1.6, halfAlong + 0.12);
         rim.position.y += 0.02;
-        rim.castShadow = false;
-        row.pieces.push({ lat, along: 0, halfLat: halfLat * 0.85, halfAlong: halfAlong * 0.8, height: 0.3, shape: "ellipse" });
+        rim.castShadow = rim.receiveShadow = true;
+        /* כמה אבנים על השפה */
+        for (let k = 0; k < 6; k++) {
+          const ang = k * 1.13 + r;
+          const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18 + (k % 3) * 0.07, 0), m.stone);
+          const sl = lat + Math.cos(ang) * (halfLat + 0.35), sa = Math.sin(ang) * (halfAlong + 0.35);
+          place(stone, sl, sa);
+          stone.position.y += 0.1;
+          stone.rotation.set(k, k * 2, 0);
+          stone.castShadow = true;
+        }
+        row.pieces.push({ lat, along: 0, halfLat: halfLat * 0.95, halfAlong: halfAlong * 0.9, height: 0.3, shape: "ellipse" });
       } else {
         /* ערימות שלג בגדלים שונים */
         const n = Math.max(2, Math.round((b - a) / 2.6));
@@ -249,25 +297,33 @@ export class Obstacles {
             }
             return;
           }
-          if (this.kind === "barrier") {
-            /* מחסום הוא קיר: לא עוברים דרכו — מחזירים את המכונית לצד שממנו הגיעה */
-            const side = prev !== null && prev !== undefined ? Math.sign(prev - hit.pc.along) || -1 : Math.sign(hit.v) || -1;
-            const push = side * (hit.pc.halfAlong + CAR_R + 0.05) - hit.v;
+          /* אי אפשר לעבור דרך מכשול (מחסום, בור או ערימת שלג): מחזירים את המכונית לצד שממנו הגיעה */
+          {
+            const pc = hit.pc;
+            let reach; // כמה רחוק לאורך המסלול המכשול "תופס" בנקודה הזאת לרוחב
+            if (pc.shape === "box") reach = pc.halfAlong + CAR_R;
+            else {
+              const L = pc.halfLat + CAR_R * 0.6, A = pc.halfAlong + CAR_R * 0.6;
+              reach = A * Math.sqrt(Math.max(0, 1 - (hit.u / L) ** 2));
+            }
+            const side = prev !== null && prev !== undefined ? Math.sign(prev - pc.along) || -1 : Math.sign(hit.v) || -1;
+            const push = side * (reach + 0.05) - hit.v;
             car.x += row.t.x * push;
             car.z += row.t.z * push;
-            car.obsD[r] = hit.pc.along + side * (hit.pc.halfAlong + CAR_R + 0.05);
+            car.obsD[r] = pc.along + side * (reach + 0.05);
           }
           if (car.obsCooldown > 0) return;
-          car.obsCooldown = this.kind === "barrier" ? 1 : 1.4;
+          car.obsCooldown = 1;
           if (this.kind === "barrier") {
             car.speed = Math.sign(car.speed) * Math.min(Math.abs(car.speed) * 0.25, 7);
             car.stun = Math.max(car.stun, 0.5);
             car.damage = Math.min(1, car.damage + 0.1);
           } else if (this.kind === "pit") {
-            car.speed *= 0.4;
-            car.slow = Math.max(car.slow, 0.7);
+            car.speed = Math.sign(car.speed) * Math.min(Math.abs(car.speed) * 0.3, 6); // הגלגל הקדמי נתקע בשפה
+            car.slow = Math.max(car.slow, 0.5);
+            car.damage = Math.min(1, car.damage + 0.06);
           } else {
-            car.speed *= 0.55;
+            car.speed = Math.sign(car.speed) * Math.min(Math.abs(car.speed) * 0.35, 8); // נתקעים בשלג
           }
           car.drifting = false;
           car.padBoost = Math.min(car.padBoost, 0.3);

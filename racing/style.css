@@ -1012,4 +1012,5 @@ body.touch .touch-pedal span { font-size: .72rem; bottom: 4px; }
   body.touch .touch-pedal.touch-brake { width: 54px; height: 60px; }
   body.touch .touch-col { flex-direction: row; align-items: flex-end; }
   body.touch .dash { bottom: max(10px, env(safe-area-inset-bottom)); }
+  body.touch .touch-look { left: 136px; bottom: 7px; transform: none; } /* ליד החצים, לא על המכונית */
 }

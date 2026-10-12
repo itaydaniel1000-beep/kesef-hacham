@@ -72,7 +72,12 @@ function materials() {
   if (mats) return mats;
   mats = {
     barrier: new THREE.MeshStandardMaterial({ map: stripeTex(), roughness: 0.78, metalness: 0 }),
-    pit: new THREE.MeshStandardMaterial({ map: pitTex(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }),
+    pit: new THREE.MeshStandardMaterial({
+      map: pitTex(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4,
+      /* החול הכהה מסביב — לא בתוך הפתח, אחרת הוא מכסה את הקירות והרצפה של הבור */
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc,
+      stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
+    }),
     rim: new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 1 }),
     /* בור אמיתי: הפתח מסמן את עצמו ב-stencil, ובתוכו מציירים קירות ורצפה עמוקים — "מתחת" לכביש */
     pitMask: new THREE.MeshBasicMaterial({
@@ -85,7 +90,7 @@ function materials() {
       stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
     }),
     pitFloor: new THREE.MeshStandardMaterial({
-      color: 0x2a1b10, roughness: 1, depthTest: false, depthWrite: false,
+      color: 0x120b06, roughness: 1, depthTest: false, depthWrite: false,
       stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc,
       stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
     }),
@@ -182,9 +187,9 @@ export class Obstacles {
         const colors = [];
         const wp = wallGeo.attributes.position;
         for (let k = 0; k < wp.count; k++) {
-          const f = Math.min(1, -wp.getY(k) / depth); // 0 למעלה, 1 בתחתית
-          const n = 0.9 + 0.2 * Math.sin(k * 12.9898);
-          colors.push((0.62 - 0.5 * f) * n, (0.45 - 0.37 * f) * n, (0.28 - 0.23 * f) * n);
+          const f = Math.sqrt(Math.min(1, -wp.getY(k) / depth)); // 0 למעלה, 1 בתחתית — מחשיך מהר: מרגיש עמוק
+          const n = 0.85 + 0.3 * Math.abs(Math.sin(k * 12.9898)); // שכבות חול לא אחידות
+          colors.push((0.42 - 0.38 * f) * n, (0.29 - 0.265 * f) * n, (0.17 - 0.155 * f) * n);
         }
         wallGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
         const wall = place(new THREE.Mesh(wallGeo, m.pitWall), lat);

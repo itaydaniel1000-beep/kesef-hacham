@@ -998,7 +998,7 @@ body.touch .touch-group { gap: 8px; }
 body.touch .touch-col { gap: 7px; }
 body.touch .touch-btn { width: 58px; height: 58px; font-size: 1.15rem; }
 body.touch .touch-nitro, body.touch .touch-item { width: 44px; height: 44px; font-size: .68rem; }
-body.touch .touch-look { width: 36px; height: 36px; font-size: 1rem; bottom: 76px; }
+body.touch .touch-look { width: 36px; height: 36px; font-size: 1rem; bottom: 60px; }
 body.touch .touch-pedal.touch-gas { width: 50px; height: 92px; }
 body.touch .touch-pedal.touch-brake { width: 58px; height: 70px; }
 body.touch .touch-pedal span { font-size: .72rem; bottom: 4px; }

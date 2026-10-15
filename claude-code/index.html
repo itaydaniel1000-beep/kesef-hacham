@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>קלוד קוד</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: a single reading column like a Claude conversation — your messages in soft bubbles, Claude's answers as plain text, a rounded composer docked at the bottom. */
+:root {
+  --bg: #faf9f5;
+  --fg: #1f1e1d;
+  --muted: #73726c;
+  --line: #e3e0d6;
+  --bubble: #efece3;
+  --composer: #ffffff;
+  --code-bg: #f1efe8;
+  --accent: #c96442;
+  --accent-fg: #ffffff;
+  --body: "Heebo", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #262624; --fg: #f3f1ea; --muted: #a29f96; --line: #3d3c38; --bubble: #141413;
+    --composer: #30302e; --code-bg: #1d1d1b; --accent: #d97757; --accent-fg: #1a1918;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #262624; --fg: #f3f1ea; --muted: #a29f96; --line: #3d3c38; --bubble: #141413;
+  --composer: #30302e; --code-bg: #1d1d1b; --accent: #d97757; --accent-fg: #1a1918;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px;
+  display: flex; flex-direction: column;
+}
+.col {
+  width: 100%; max-width: 740px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header .col { padding-block: 10px; display: flex; align-items: center; gap: 8px; position: relative; }
+header h1 { margin-inline-end: auto; }
+.hbtn {
+  font: inherit; font-size: .88rem; color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.hbtn:hover { background: var(--bubble); }
+.hbtn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.chats {
+  position: absolute; top: calc(100% + 4px); inset-inline-end: max(16px, env(safe-area-inset-right, 0px)); z-index: 5;
+  width: min(320px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto; background: var(--composer);
+  border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+.chats button {
+  display: block; width: 100%; text-align: start; font: inherit; font-size: .92rem; color: var(--fg); background: none;
+  border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chats button:hover, .chats button[aria-current="true"] { background: var(--bubble); }
+.chat-row { display: flex; align-items: center; gap: 2px; border-radius: 10px; }
+.chat-row:hover, .chat-row.current { background: var(--bubble); }
+.chat-row > button:first-child { flex: 1; min-width: 0; }
+.chats .chat-row button:hover { background: none; }
+.chats .rename { flex: none; width: 32px; padding: 6px; color: var(--muted); display: grid; place-items: center; }
+.chats .rename:hover { color: var(--fg); }
+.chat-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: .92rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin: 2px;
+}
+.chats .none { color: var(--muted); font-size: .88rem; padding: 9px 12px; }
+h1 { font-size: .95rem; font-weight: 500; margin: 0; color: var(--muted); }
+
+main { flex: 1; overflow-y: auto; }
+#log { padding-block: 16px 32px; display: flex; flex-direction: column; gap: 22px; }
+.empty { color: var(--muted); line-height: 1.7; margin-top: 18vh; text-align: center; }
+.empty strong { display: block; color: var(--fg); font-size: 1.5rem; font-weight: 500; margin-bottom: 6px; }
+
+.turn-user { align-self: flex-start; max-width: 85%; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sender { font-size: .78rem; color: var(--muted); padding-inline: 6px; }
+.bubble {
+  background: var(--bubble); border-radius: 18px; padding: 10px 16px; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.turn-claude { min-width: 0; line-height: 1.75; overflow-wrap: anywhere; }
+.turn-claude > :first-child { margin-top: 0; }
+.turn-claude > :last-child { margin-bottom: 0; }
+.turn-claude p { margin: 0 0 .8em; }
+.turn-claude h2, .turn-claude h3, .turn-claude h4 { font-weight: 700; margin: 1.1em 0 .4em; line-height: 1.35; text-wrap: balance; }
+.turn-claude h2 { font-size: 1.2rem; } .turn-claude h3 { font-size: 1.08rem; } .turn-claude h4 { font-size: 1rem; }
+.turn-claude ul, .turn-claude ol { margin: 0 0 .8em; padding-inline-start: 1.4em; }
+.turn-claude li { margin: .2em 0; }
+.turn-claude code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); border-radius: 5px; padding: 1px 5px; }
+.turn-claude pre {
+  font-family: var(--mono); font-size: .85rem; line-height: 1.55; direction: ltr; text-align: left;
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  overflow-x: auto; margin: 0 0 .9em; white-space: pre;
+}
+.turn-claude pre code { background: none; padding: 0; font-size: inherit; }
+.turn-claude a { color: var(--accent); }
+.turn-claude hr { border: 0; border-top: 1px solid var(--line); margin: 1em 0; }
+
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .92rem; }
+.spark { width: 18px; height: 18px; color: var(--accent); animation: spin 2.4s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spark { animation: none; } }
+
+footer .col { padding-block: 8px 14px; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+.composer {
+  display: flex; align-items: flex-end; gap: 8px; background: var(--composer); border: 1px solid var(--line);
+  border-radius: 20px; padding: 10px 10px 10px 12px; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.composer:focus-within { border-color: var(--muted); }
+textarea {
+  flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--fg);
+  font: inherit; line-height: 1.5; padding: 6px 6px; max-height: 40vh; min-height: 24px;
+}
+.send {
+  width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.send:disabled { opacity: .4; cursor: default; }
+.send:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.composer { flex-wrap: wrap; }
+.attachments { flex-basis: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
+.attachments:empty { display: none; }
+.thumb { position: relative; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb button {
+  position: absolute; top: 3px; inset-inline-end: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: var(--fg); color: var(--bg); font-size: 13px; line-height: 20px; padding: 0; cursor: pointer;
+}
+.attach {
+  width: 34px; height: 34px; border-radius: 10px; border: 0; background: transparent; color: var(--muted);
+  display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.attach:hover { color: var(--fg); background: var(--bubble); }
+.attach:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.pics { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+.pics img { max-width: min(260px, 100%); max-height: 260px; border-radius: 14px; display: block; border: 1px solid var(--line); }
+.pics .pending { width: 120px; height: 90px; border-radius: 14px; background: var(--bubble); display: grid; place-items: center; color: var(--muted); font-size: .8rem; }
+.notice { font-size: .8rem; color: var(--muted); margin-top: 6px; text-align: center; min-height: 1em; }
+.notice.bad { color: var(--accent); }
+</style>
+
+<div dir="rtl" style="display:contents">
+<header><div class="col">
+  <h1>קלוד קוד</h1>
+  <button class="hbtn" id="chats-btn" type="button" aria-expanded="false" aria-controls="chats">צ׳אטים</button>
+  <button class="hbtn" id="new-chat" type="button">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    צ׳אט חדש
+  </button>
+  <div class="chats" id="chats" hidden></div>
+</div></header>
+
+<main id="log-scroll">
+  <div class="col" id="log">
+    <div class="empty" id="empty"><strong>במה אפשר לעזור?</strong>כתוב הודעה כדי להתחיל צ׳אט חדש. קלוד יענה כאן.</div>
+  </div>
+</main>
+
+<footer>
+  <div class="col">
+    <form class="composer" id="composer">
+      <div class="attachments" id="attachments"></div>
+      <button class="attach" id="attach" type="button" aria-label="צרף תמונה" title="צרף תמונה">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+      <textarea id="input" rows="1" placeholder="כתוב הודעה לקלוד, או הדבק תמונה" aria-label="הודעה לקלוד"></textarea>
+      <button class="send" id="send" type="submit" aria-label="שלח">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+    <div class="notice" id="notice"></div>
+  </div>
+</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log"), scrollEl = $("log-scroll"), emptyEl = $("empty");
+const input = $("input"), sendBtn = $("send"), notice = $("notice");
+let db = null, comments = null, assets = null, canSend = "off", threadId = null, myId = null;
+let msgs = [], names = {}, pending = [], chats = [];
+// The open conversation. null = a new chat that starts with the next message.
+let currentChat = null, chatChosen = false;
+try { const c = localStorage.getItem("currentChat"); if (c) { currentChat = c; chatChosen = true; } } catch {}
+function setChat(id) {
+  currentChat = id; chatChosen = true;
+  try { if (id) localStorage.setItem("currentChat", id); else localStorage.removeItem("currentChat"); } catch {}
+  render(); renderChats();
+}
+
+function setNotice(text, bad) { notice.textContent = text || ""; notice.classList.toggle("bad", !!bad); }
+
+// ---- Markdown for Claude's answers (escaped first, then a small safe subset) ----
+function esc(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+}
+function markdown(src) {
+  const lines = String(src || "").replace(/\r/g, "").split("\n");
+  let html = "", i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^```/.test(l)) {
+      const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++; html += "<pre><code>" + esc(buf.join("\n")) + "</code></pre>"; continue;
+    }
+    let m;
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { const n = Math.min(4, m[1].length + 1); html += `<h${n}>${inline(m[2])}</h${n}>`; i++; continue; }
+    if (/^\s*([-*]{3,})\s*$/.test(l)) { html += "<hr>"; i++; continue; }
+    if (/^\s*[-*]\s+/.test(l)) {
+      html += "<ul>";
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) html += "<li>" + inline(lines[i++].replace(/^\s*[-*]\s+/, "")) + "</li>";
+      html += "</ul>"; continue;
+    }
+    if (/^\s*\d+[.)]\s+/.test(l)) {
+      html += "<ol>";
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) html += "<li>" + inline(lines[i++].replace(/^\s*\d+[.)]\s+/, "")) + "</li>";
+      html += "</ol>"; continue;
+    }
+    if (!l.trim()) { i++; continue; }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|\s*[-*]\s+|\s*\d+[.)]\s+)/.test(lines[i])) para.push(inline(lines[i++]));
+    html += "<p>" + para.join("<br>") + "</p>";
+  }
+  return html;
+}
+
+// ---- Order: every message by the time it was sent, each answer right after the message it answers ----
+function ordered() {
+  const mine = msgs.filter(m => currentChat && m.data.chat === currentChat);
+  const users = mine.filter(m => m.data.from !== "claude");
+  const ids = new Set(users.map(u => u.id));
+  const byParent = {}, groups = [];
+  for (const m of mine) {
+    if (m.data.from !== "claude") continue;
+    const p = m.data.reply_to;
+    if (p && ids.has(p)) (byParent[p] = byParent[p] || []).push(m);
+    else groups.push({ at: m.data.at || 0, items: [m] });
+  }
+  for (const u of users) {
+    const replies = (byParent[u.id] || []).sort((a, b) => (a.data.at || 0) - (b.data.at || 0) || (a.id < b.id ? -1 : 1));
+    groups.push({ at: u.data.at || 0, items: [u, ...replies] });
+  }
+  groups.sort((a, b) => a.at - b.at);
+  return groups.flatMap(g => g.items);
+}
+
+const PENCIL = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+let renaming = null;
+function renderChats() {
+  const box = $("chats");
+  box.textContent = "";
+  if (!chats.length) { const n = document.createElement("div"); n.className = "none"; n.textContent = "עוד אין צ׳אטים"; box.append(n); return; }
+  for (const c of chats) {
+    const row = document.createElement("div");
+    row.className = "chat-row" + (c.id === currentChat ? " current" : "");
+    if (renaming === c.id) {
+      const inp = document.createElement("input");
+      inp.id = "rename-" + c.id; inp.value = c.data.title || ""; inp.maxLength = 60; inp.setAttribute("aria-label", "שם הצ׳אט");
+      const save = async () => {
+        const t = inp.value.replace(/\s+/g, " ").trim();
+        renaming = null;
+        if (t && t !== c.data.title) {
+          try { await db.doc("chats/" + c.id).update({ title: t, titleByUser: true }); }
+          catch (e) { setNotice("השם לא נשמר. נסה שוב", true); }
+        }
+        renderChats();
+      };
+      inp.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); save(); }
+        if (ev.key === "Escape") { renaming = null; renderChats(); }
+      });
+      inp.addEventListener("blur", save);
+      row.append(inp); box.append(row);
+      setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      continue;
+    }
+    const b = document.createElement("button"); b.type = "button";
+    b.textContent = c.data.title || "צ׳אט חדש";
+    if (c.id === currentChat) b.setAttribute("aria-current", "true");
+    b.addEventListener("click", () => { setChat(c.id); toggleChats(false); });
+    const r = document.createElement("button"); r.type = "button"; r.className = "rename";
+    r.innerHTML = PENCIL; r.setAttribute("aria-label", "שנה שם"); r.title = "שנה שם";
+    r.addEventListener("click", (ev) => { ev.stopPropagation(); renaming = c.id; renderChats(); });
+    row.append(b, r); box.append(row);
+  }
+}
+function toggleChats(open) {
+  const box = $("chats"), btn = $("chats-btn");
+  const show = open === undefined ? box.hidden : open;
+  box.hidden = !show; btn.setAttribute("aria-expanded", String(show));
+}
+$("chats-btn").addEventListener("click", () => toggleChats());
+$("new-chat").addEventListener("click", () => { setChat(null); toggleChats(false); input.focus(); });
+document.addEventListener("click", (ev) => {
+  if (!$("chats").hidden && !ev.target.closest("#chats, #chats-btn")) toggleChats(false);
+});
+
+const SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l1.6 6.1L19 5l-3.1 5.4L22 12l-6.1 1.6L19 19l-5.4-3.1L12 22l-1.6-6.1L5 19l3.1-5.4L2 12l6.1-1.6L5 5l5.4 3.1z"/></svg>';
+
+function render() {
+  const list = ordered();
+  emptyEl.hidden = list.length > 0;
+  const atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 120;
+  [...logEl.querySelectorAll(".turn")].forEach(n => n.remove());
+  const answered = new Set(list.filter(m => m.data.from === "claude" && m.data.reply_to).map(m => m.data.reply_to));
+  for (const m of list) {
+    const d = m.data;
+    const el = document.createElement("div");
+    el.dataset.id = m.id;
+    if (d.from === "claude") {
+      el.className = "turn turn-claude";
+      el.innerHTML = markdown(d.text);
+    } else {
+      el.className = "turn turn-user";
+      const name = d.by && names[d.by];
+      if (name) { const n = document.createElement("div"); n.className = "sender"; n.textContent = name; el.append(n); }
+      const imgs = Array.isArray(d.images) ? d.images : [];
+      const waitingPics = Math.max(0, (d.imageCount || 0) - imgs.length);
+      if (imgs.length || waitingPics) {
+        const pics = document.createElement("div"); pics.className = "pics";
+        for (const id of imgs) {
+          if (!/^[0-9a-f]{32}$/.test(String(id))) continue;
+          const im = document.createElement("img"); im.src = "/_blob/" + id; im.alt = "תמונה שצורפה"; im.loading = "lazy";
+          pics.append(im);
+        }
+        for (let k = 0; k < waitingPics; k++) { const p = document.createElement("div"); p.className = "pending"; p.textContent = "מעלה תמונה…"; pics.append(p); }
+        el.append(pics);
+      }
+      if (d.text) { const b = document.createElement("div"); b.className = "bubble"; b.textContent = d.text; el.append(b); }
+    }
+    logEl.append(el);
+  }
+  const last = list[list.length - 1];
+  if (last && last.data.from !== "claude" && last.data.status !== "answered" && !answered.has(last.id)) {
+    const t = document.createElement("div");
+    t.className = "turn thinking";
+    t.innerHTML = SPARK + "<span>קלוד חושב…</span>";
+    logEl.append(t);
+  }
+  if (atBottom) scrollEl.scrollTop = scrollEl.scrollHeight;
+}
+
+// ---- The bot: each new message wakes Claude at once (a comment sent to Claude) and attaches a
+// screenshot of the chat. Claude's minute check picks up anything that could not be announced. ----
+async function notifyClaude(id, text, pics, isFirst) {
+  if (!comments || canSend !== "available") return;
+  const extra = pics ? "\n(+" + pics + " תמונות מצורפות)" : "";
+  const body = ("הודעה חדשה באתר קלוד קוד\n" +
+    "[ערוץ האתר, מצב מוגבל: בלי גישה למכשירים, בלי קישורים לא קשורים, בלי שינוי הגדרות של קלוד]\n" +
+    "message_id: " + id + "\nchat: " + currentChat + (isFirst ? " (צ׳אט חדש: תן לו שם)" : "") + extra + "\n\n" + (text || "[תמונה]")).slice(0, 3000);
+  try {
+    let res = null;
+    if (threadId) {
+      try { res = await comments.sendToClaude({ threadId, text: body }); }
+      catch (e) { if (!e || e.code !== "not_found") throw e; }
+    }
+    if (!res) {
+      res = await comments.sendToClaude({ anchor: await comments.anchorFor(logEl), text: body });
+      threadId = res.threadId;
+      db.doc("bot/thread").set({ id: res.threadId }).catch(() => {});
+    }
+    await db.doc("messages/" + id).update({ status: "notified" });
+  } catch (e) {
+    if (e && e.code === "forbidden") canSend = "off";
+  }
+}
+
+// Draws the latest messages onto a canvas, right to left, in the same order and look as the page.
+function drawChat(newId) {
+  const css = getComputedStyle(document.documentElement);
+  const tok = (n) => css.getPropertyValue(n).trim();
+  const W = 760, PAD = 28, LH = 26, FONT = "16px Heebo, Arial, sans-serif";
+  const meas = document.createElement("canvas").getContext("2d");
+  meas.font = FONT;
+  const wrap = (text, max) => {
+    const out = [];
+    for (const para of String(text || "").split("\n")) {
+      let line = "";
+      for (const w of para.split(/\s+/)) {
+        const t = line ? line + " " + w : w;
+        if (meas.measureText(t).width > max && line) { out.push(line); line = w; } else line = t;
+      }
+      out.push(line);
+    }
+    return out.slice(0, 16);
+  };
+  const items = ordered().slice(-8).map((m) => {
+    const mine = m.data.from !== "claude";
+    const max = mine ? Math.round(W * 0.7) : W - PAD * 2;
+    const picNote = mine && m.data.imageCount ? "[" + m.data.imageCount + " תמונות] " : "";
+    const text = mine ? picNote + (m.data.text || "") : String(m.data.text || "").replace(/[`*#]/g, "");
+    const lines = wrap(text, max - (mine ? 32 : 0));
+    const w = mine ? Math.min(max, Math.max(...lines.map((l) => meas.measureText(l).width)) + 32) : max;
+    const name = mine && m.data.by && names[m.data.by];
+    return { m, mine, lines, w, name, h: lines.length * LH + (mine ? 20 : 0) + (name ? 20 : 0) };
+  });
+  const H = 56 + items.reduce((a, it) => a + it.h + 22, 0) + PAD;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = tok("--bg"); g.fillRect(0, 0, W, H);
+  g.direction = "rtl"; g.textAlign = "right"; g.textBaseline = "middle";
+  g.fillStyle = tok("--muted"); g.font = "500 15px Heebo, Arial, sans-serif";
+  g.fillText("קלוד קוד", W - PAD, 26);
+  let y = 56;
+  for (const it of items) {
+    let top = y;
+    if (it.name) { g.fillStyle = tok("--muted"); g.font = "13px Heebo, Arial, sans-serif"; g.fillText(it.name, W - PAD - 6, top + 8); top += 20; }
+    g.font = FONT;
+    if (it.mine) {
+      const x = W - PAD - it.w, bh = it.lines.length * LH + 20;
+      g.fillStyle = tok("--bubble");
+      g.beginPath(); if (g.roundRect) g.roundRect(x, top, it.w, bh, 18); else g.rect(x, top, it.w, bh); g.fill();
+      if (it.m.id === newId) { g.strokeStyle = tok("--accent"); g.lineWidth = 2; g.stroke(); }
+      g.fillStyle = tok("--fg");
+      it.lines.forEach((l, i) => g.fillText(l, W - PAD - 16, top + 10 + LH / 2 + i * LH));
+    } else {
+      g.fillStyle = tok("--fg");
+      it.lines.forEach((l, i) => g.fillText(l, W - PAD, top + LH / 2 + i * LH));
+    }
+    y += it.h + 22;
+  }
+  return c;
+}
+
+async function screenshot(id) {
+  if (!assets) return;
+  try {
+    for (let n = 0; n < 30 && !msgs.some((m) => m.id === id); n++) await new Promise((r) => setTimeout(r, 100));
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const blob = await new Promise((r) => drawChat(id).toBlob(r, "image/png"));
+    if (!blob) return;
+    const up = await assets.upload(blob, { type: "image/png" });
+    await db.doc("messages/" + id).update({ screenshot: up.id });
+  } catch (e) { /* the message still reaches Claude without a picture */ }
+}
+
+// ---- Pasted or attached pictures: previewed in the composer, uploaded when the message is sent ----
+const attachEl = $("attachments"), fileEl = $("file");
+function renderPending() {
+  attachEl.textContent = "";
+  pending.forEach((p, i) => {
+    const t = document.createElement("div"); t.className = "thumb";
+    const im = document.createElement("img"); im.src = p.url; im.alt = "";
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "הסר תמונה");
+    x.addEventListener("click", () => { URL.revokeObjectURL(p.url); pending.splice(i, 1); renderPending(); });
+    t.append(im, x); attachEl.append(t);
+  });
+}
+const OK_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+function addFiles(files) {
+  let added = 0;
+  for (const f of files) {
+    if (!OK_TYPES.includes(f.type)) continue;
+    if (f.size > 20 * 1024 * 1024) { setNotice("התמונה גדולה מדי (עד 20MB)", true); continue; }
+    if (pending.length >= 6) { setNotice("אפשר לצרף עד 6 תמונות להודעה", true); break; }
+    pending.push({ file: f, url: URL.createObjectURL(f) }); added++;
+  }
+  if (added) {
+    if (!assets) setNotice("רק מי שיכול לערוך את העמוד יכול לצרף תמונות", true);
+    renderPending();
+  }
+  return added;
+}
+input.addEventListener("paste", (ev) => {
+  const files = [...(ev.clipboardData ? ev.clipboardData.files : [])];
+  if (files.length && addFiles(files)) ev.preventDefault();
+});
+$("attach").addEventListener("click", () => fileEl.click());
+fileEl.addEventListener("change", () => { addFiles([...fileEl.files]); fileEl.value = ""; });
+document.addEventListener("dragover", (ev) => ev.preventDefault());
+document.addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  if (ev.dataTransfer && ev.dataTransfer.files.length) addFiles([...ev.dataTransfer.files]);
+});
+
+async function uploadPictures(id, files) {
+  const ids = [];
+  for (const f of files) {
+    try { const up = await assets.upload(f, { type: f.type }); ids.push(up.id); }
+    catch (e) { setNotice(e && e.code === "too_large" ? "תמונה אחת גדולה מדי ולא נשלחה" : "תמונה אחת לא הועלתה", true); }
+  }
+  await db.doc("messages/" + id).update({ images: ids, imageCount: ids.length }).catch(() => {});
+}
+
+$("composer").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const text = input.value.trim();
+  const files = assets ? pending.map(p => p.file) : [];
+  if ((!text && !files.length) || !db) return;
+  sendBtn.disabled = true;
+  try {
+    const isFirst = !currentChat;
+    if (!currentChat) {
+      const cref = db.collection("chats").doc();
+      const c = { title: "צ׳אט חדש", at: Date.now(), autoTitle: true };
+      if (myId) c.by = myId;
+      await cref.set(c);
+      setChat(cref.id);
+    }
+    const ref = db.collection("messages").doc();
+    const doc = { from: "user", text, at: Date.now(), status: "waiting", chat: currentChat };
+    if (myId) doc.by = myId;
+    if (files.length) { doc.images = []; doc.imageCount = files.length; }
+    await ref.set(doc);
+    input.value = ""; autosize();
+    pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; renderPending();
+    setNotice("");
+    notifyClaude(ref.id, text, files.length, isFirst);
+    if (files.length) uploadPictures(ref.id, files);
+    screenshot(ref.id);
+  } catch (e) {
+    setNotice(e && e.code === "invalid_argument" ? "אין לך הרשאה לכתוב בצ׳אט הזה" :
+              e && e.code === "quota_exceeded" ? "הצ׳אט מלא. צריך למחוק הודעות ישנות" : "ההודעה לא נשמרה. נסה שוב", true);
+  } finally { sendBtn.disabled = false; input.focus(); }
+});
+input.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("composer").requestSubmit(); }
+});
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + "px"; }
+input.addEventListener("input", autosize);
+
+(async () => {
+  db = await claude.use("db");
+  if (!db) {
+    sendBtn.disabled = true;
+    setNotice("צריך להיות מחובר ל־claude.ai כדי להשתמש בצ׳אט.", true);
+    return;
+  }
+  db.collection("messages").orderBy("at", "asc").limit(500).onSnapshot(
+    (snap) => { msgs = snap.docs.map(d => ({ id: d.id, data: d.data() })); render(); },
+    () => setNotice("החיבור לצ׳אט נותק. רענן את העמוד.", true)
+  );
+  db.collection("chats").orderBy("at", "desc").limit(200).onSnapshot((snap) => {
+    chats = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+    // Without a remembered choice, open the most recent chat.
+    if (!chatChosen && chats.length) { currentChat = chats[0].id; }
+    if (currentChat && chatChosen && !chats.some(c => c.id === currentChat) && !snap.metadata.fromCache) {
+      currentChat = chats.length ? chats[0].id : null;
+    }
+    render(); renderChats();
+  }, () => {});
+  db.collection("names").onSnapshot((snap) => {
+    names = {};
+    snap.docs.forEach((d) => { const v = d.data(); if (v && v.name) names[d.id] = v.name; });
+    render();
+  }, () => {});
+  db.doc("bot/thread").onSnapshot((s) => { const d = s.exists ? s.data() : null; if (d && d.id) threadId = d.id; }, () => {});
+  const user = await claude.use("user");
+  if (user) { try { myId = await user.id(); } catch { myId = null; } }
+  assets = await claude.use("assets");
+  comments = await claude.use("comments");
+  if (comments) { try { canSend = await comments.canSendToClaude(); } catch { canSend = "off"; } }
+  input.addEventListener("focus", async () => {
+    if (comments) { try { canSend = await comments.canSendToClaude(); } catch { canSend = "off"; } }
+  });
+})();
+</script>
+
+</body>
+</html>

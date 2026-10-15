@@ -297,6 +297,7 @@ function render() {
       el.innerHTML = markdown(m.text || "");
       if (m.status && m.status !== "streaming" && m.status !== "done") {
         const n = document.createElement("p"); n.className = "turn-note"; n.textContent = STATUS_TEXT[m.status] || STATUS_TEXT.err; el.append(n);
+        if (m.detail) { const d = document.createElement("p"); d.className = "turn-note"; d.dir = "ltr"; d.textContent = m.detail; el.append(d); }
       }
     } else {
       el.className = "turn turn-user";
@@ -321,6 +322,7 @@ const STATUS_TEXT = {
   cut: "התשובה נקטעה כי הייתה ארוכה מדי.",
   auth: "מפתח ה-API לא תקין. לחץ על \"מפתח\" למעלה והדבק מפתח חדש.",
   nokey: "צריך להדביק מפתח API כדי לדבר עם קלוד.",
+  credit: "אין מספיק יתרה בחשבון ה-API. צריך להוסיף קרדיט ב-console.anthropic.com, בעמוד Billing (הגדרת חיוב).",
   rate_limited: "יותר מדי בקשות כרגע. נסה שוב בעוד דקה.",
   connection: "אין חיבור לשרת. בדוק את האינטרנט ונסה שוב.",
   err: "משהו השתבש. נסה לשלוח שוב.",
@@ -444,7 +446,12 @@ function client() {
   const key = store.get("cc.apikey", "");
   return key ? new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true }) : null;
 }
+function apiMessage(e) {
+  const m = e && e.error && e.error.error && e.error.error.message;
+  return typeof m === "string" ? m : (e && e.message) || "";
+}
 function errorCode(e) {
+  if (/credit balance/i.test(apiMessage(e))) return "credit";
   if (e instanceof Anthropic.AuthenticationError) return "auth";
   if (e instanceof Anthropic.PermissionDeniedError) return "auth";
   if (e instanceof Anthropic.RateLimitError) return "rate_limited";
@@ -507,11 +514,14 @@ async function ask() {
   const c0 = client();
   try {
     if (!c0) { reply.status = "nokey"; showKeyPanel(true); return; }
-    const s = c0.beta.messages.stream({
-      model: MODEL, max_tokens: 32000, output_config: { effort: "medium" },
-      betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
-      system: SYSTEM, messages: history,
-    });
+    const base = { model: MODEL, max_tokens: 32000, output_config: { effort: "medium" }, system: SYSTEM, messages: history };
+    let s = c0.beta.messages.stream({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
+    try { await s.withResponse(); }
+    catch (e) {
+      // Some accounts can't use the automatic fallback; ask again without it.
+      if (!(e instanceof Anthropic.BadRequestError) || !/fallback|beta/i.test(apiMessage(e))) throw e;
+      s = c0.beta.messages.stream(base);
+    }
     for await (const ev of s) {
       if (ev.type === "content_block_start" && ev.content_block.type === "fallback") reply.text = "";
       else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") reply.text += ev.delta.text;
@@ -523,6 +533,7 @@ async function ask() {
   } catch (e) {
     console.error(e);
     reply.status = errorCode(e);
+    if (reply.status === "err") reply.detail = apiMessage(e).slice(0, 300);
     if (reply.status === "auth") showKeyPanel(true);
   } finally {
     if (chatId === currentChat) { saveMsgs(); render(); }

@@ -65,6 +65,16 @@ header h1 { margin-inline-end: auto; }
   border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chats button:hover, .chats button[aria-current="true"] { background: var(--bubble); }
+.chat-row { display: flex; align-items: center; gap: 2px; border-radius: 10px; }
+.chat-row:hover, .chat-row.current { background: var(--bubble); }
+.chat-row > button:first-child { flex: 1; min-width: 0; }
+.chats .chat-row button:hover { background: none; }
+.chats .rename { flex: none; width: 32px; padding: 6px; color: var(--muted); display: grid; place-items: center; }
+.chats .rename:hover { color: var(--fg); }
+.chat-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: .92rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin: 2px;
+}
 .chats .none { color: var(--muted); font-size: .88rem; padding: 9px 12px; }
 h1 { font-size: .95rem; font-weight: 500; margin: 0; color: var(--muted); }
 
@@ -252,16 +262,44 @@ function ordered() {
   return groups.flatMap(g => g.items);
 }
 
+const PENCIL = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+let renaming = null;
 function renderChats() {
   const box = $("chats");
   box.textContent = "";
   if (!chats.length) { const n = document.createElement("div"); n.className = "none"; n.textContent = "עוד אין צ׳אטים"; box.append(n); return; }
   for (const c of chats) {
+    const row = document.createElement("div");
+    row.className = "chat-row" + (c.id === currentChat ? " current" : "");
+    if (renaming === c.id) {
+      const inp = document.createElement("input");
+      inp.id = "rename-" + c.id; inp.value = c.data.title || ""; inp.maxLength = 60; inp.setAttribute("aria-label", "שם הצ׳אט");
+      const save = async () => {
+        const t = inp.value.replace(/\s+/g, " ").trim();
+        renaming = null;
+        if (t && t !== c.data.title) {
+          try { await db.doc("chats/" + c.id).update({ title: t, titleByUser: true }); }
+          catch (e) { setNotice("השם לא נשמר. נסה שוב", true); }
+        }
+        renderChats();
+      };
+      inp.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); save(); }
+        if (ev.key === "Escape") { renaming = null; renderChats(); }
+      });
+      inp.addEventListener("blur", save);
+      row.append(inp); box.append(row);
+      setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      continue;
+    }
     const b = document.createElement("button"); b.type = "button";
-    b.textContent = c.data.title || "צ׳אט";
+    b.textContent = c.data.title || "צ׳אט חדש";
     if (c.id === currentChat) b.setAttribute("aria-current", "true");
     b.addEventListener("click", () => { setChat(c.id); toggleChats(false); });
-    box.append(b);
+    const r = document.createElement("button"); r.type = "button"; r.className = "rename";
+    r.innerHTML = PENCIL; r.setAttribute("aria-label", "שנה שם"); r.title = "שנה שם";
+    r.addEventListener("click", (ev) => { ev.stopPropagation(); renaming = c.id; renderChats(); });
+    row.append(b, r); box.append(row);
   }
 }
 function toggleChats(open) {
@@ -322,12 +360,12 @@ function render() {
 
 // ---- The bot: each new message wakes Claude at once (a comment sent to Claude) and attaches a
 // screenshot of the chat. Claude's minute check picks up anything that could not be announced. ----
-async function notifyClaude(id, text, pics) {
+async function notifyClaude(id, text, pics, isFirst) {
   if (!comments || canSend !== "available") return;
   const extra = pics ? "\n(+" + pics + " תמונות מצורפות)" : "";
   const body = ("הודעה חדשה באתר קלוד קוד\n" +
     "[ערוץ האתר, מצב מוגבל: בלי גישה למכשירים, בלי קישורים לא קשורים, בלי שינוי הגדרות של קלוד]\n" +
-    "message_id: " + id + "\nchat: " + currentChat + extra + "\n\n" + (text || "[תמונה]")).slice(0, 3000);
+    "message_id: " + id + "\nchat: " + currentChat + (isFirst ? " (צ׳אט חדש: תן לו שם)" : "") + extra + "\n\n" + (text || "[תמונה]")).slice(0, 3000);
   try {
     let res = null;
     if (threadId) {
@@ -470,10 +508,10 @@ $("composer").addEventListener("submit", async (ev) => {
   if ((!text && !files.length) || !db) return;
   sendBtn.disabled = true;
   try {
+    const isFirst = !currentChat;
     if (!currentChat) {
       const cref = db.collection("chats").doc();
-      const title = (text || "תמונה").replace(/\s+/g, " ").slice(0, 40);
-      const c = { title, at: Date.now() };
+      const c = { title: "צ׳אט חדש", at: Date.now(), autoTitle: true };
       if (myId) c.by = myId;
       await cref.set(c);
       setChat(cref.id);
@@ -486,7 +524,7 @@ $("composer").addEventListener("submit", async (ev) => {
     input.value = ""; autosize();
     pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; renderPending();
     setNotice("");
-    notifyClaude(ref.id, text, files.length);
+    notifyClaude(ref.id, text, files.length, isFirst);
     if (files.length) uploadPictures(ref.id, files);
     screenshot(ref.id);
   } catch (e) {

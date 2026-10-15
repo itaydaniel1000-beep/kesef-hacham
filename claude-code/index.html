@@ -47,7 +47,25 @@ body {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-header .col { padding-block: 12px; }
+header .col { padding-block: 10px; display: flex; align-items: center; gap: 8px; position: relative; }
+header h1 { margin-inline-end: auto; }
+.hbtn {
+  font: inherit; font-size: .88rem; color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.hbtn:hover { background: var(--bubble); }
+.hbtn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.chats {
+  position: absolute; top: calc(100% + 4px); inset-inline-end: max(16px, env(safe-area-inset-right, 0px)); z-index: 5;
+  width: min(320px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto; background: var(--composer);
+  border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+.chats button {
+  display: block; width: 100%; text-align: start; font: inherit; font-size: .92rem; color: var(--fg); background: none;
+  border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chats button:hover, .chats button[aria-current="true"] { background: var(--bubble); }
+.chats .none { color: var(--muted); font-size: .88rem; padding: 9px 12px; }
 h1 { font-size: .95rem; font-weight: 500; margin: 0; color: var(--muted); }
 
 main { flex: 1; overflow-y: auto; }
@@ -123,11 +141,19 @@ textarea {
 </style>
 
 <div dir="rtl" style="display:contents">
-<header><div class="col"><h1>קלוד קוד</h1></div></header>
+<header><div class="col">
+  <h1>קלוד קוד</h1>
+  <button class="hbtn" id="chats-btn" type="button" aria-expanded="false" aria-controls="chats">צ׳אטים</button>
+  <button class="hbtn" id="new-chat" type="button">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    צ׳אט חדש
+  </button>
+  <div class="chats" id="chats" hidden></div>
+</div></header>
 
 <main id="log-scroll">
   <div class="col" id="log">
-    <div class="empty" id="empty"><strong>במה אפשר לעזור?</strong>כתוב הודעה, וקלוד יענה כאן.</div>
+    <div class="empty" id="empty"><strong>במה אפשר לעזור?</strong>כתוב הודעה כדי להתחיל צ׳אט חדש. קלוד יענה כאן.</div>
   </div>
 </main>
 
@@ -154,7 +180,15 @@ const $ = (id) => document.getElementById(id);
 const logEl = $("log"), scrollEl = $("log-scroll"), emptyEl = $("empty");
 const input = $("input"), sendBtn = $("send"), notice = $("notice");
 let db = null, comments = null, assets = null, canSend = "off", threadId = null, myId = null;
-let msgs = [], names = {}, pending = [];
+let msgs = [], names = {}, pending = [], chats = [];
+// The open conversation. null = a new chat that starts with the next message.
+let currentChat = null, chatChosen = false;
+try { const c = localStorage.getItem("currentChat"); if (c) { currentChat = c; chatChosen = true; } } catch {}
+function setChat(id) {
+  currentChat = id; chatChosen = true;
+  try { if (id) localStorage.setItem("currentChat", id); else localStorage.removeItem("currentChat"); } catch {}
+  render(); renderChats();
+}
 
 function setNotice(text, bad) { notice.textContent = text || ""; notice.classList.toggle("bad", !!bad); }
 
@@ -200,10 +234,11 @@ function markdown(src) {
 
 // ---- Order: every message by the time it was sent, each answer right after the message it answers ----
 function ordered() {
-  const users = msgs.filter(m => m.data.from !== "claude");
+  const mine = msgs.filter(m => currentChat && m.data.chat === currentChat);
+  const users = mine.filter(m => m.data.from !== "claude");
   const ids = new Set(users.map(u => u.id));
   const byParent = {}, groups = [];
-  for (const m of msgs) {
+  for (const m of mine) {
     if (m.data.from !== "claude") continue;
     const p = m.data.reply_to;
     if (p && ids.has(p)) (byParent[p] = byParent[p] || []).push(m);
@@ -216,6 +251,29 @@ function ordered() {
   groups.sort((a, b) => a.at - b.at);
   return groups.flatMap(g => g.items);
 }
+
+function renderChats() {
+  const box = $("chats");
+  box.textContent = "";
+  if (!chats.length) { const n = document.createElement("div"); n.className = "none"; n.textContent = "עוד אין צ׳אטים"; box.append(n); return; }
+  for (const c of chats) {
+    const b = document.createElement("button"); b.type = "button";
+    b.textContent = c.data.title || "צ׳אט";
+    if (c.id === currentChat) b.setAttribute("aria-current", "true");
+    b.addEventListener("click", () => { setChat(c.id); toggleChats(false); });
+    box.append(b);
+  }
+}
+function toggleChats(open) {
+  const box = $("chats"), btn = $("chats-btn");
+  const show = open === undefined ? box.hidden : open;
+  box.hidden = !show; btn.setAttribute("aria-expanded", String(show));
+}
+$("chats-btn").addEventListener("click", () => toggleChats());
+$("new-chat").addEventListener("click", () => { setChat(null); toggleChats(false); input.focus(); });
+document.addEventListener("click", (ev) => {
+  if (!$("chats").hidden && !ev.target.closest("#chats, #chats-btn")) toggleChats(false);
+});
 
 const SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l1.6 6.1L19 5l-3.1 5.4L22 12l-6.1 1.6L19 19l-5.4-3.1L12 22l-1.6-6.1L5 19l3.1-5.4L2 12l6.1-1.6L5 5l5.4 3.1z"/></svg>';
 
@@ -267,7 +325,9 @@ function render() {
 async function notifyClaude(id, text, pics) {
   if (!comments || canSend !== "available") return;
   const extra = pics ? "\n(+" + pics + " תמונות מצורפות)" : "";
-  const body = ("הודעה חדשה באתר קלוד קוד\nmessage_id: " + id + extra + "\n\n" + (text || "[תמונה]")).slice(0, 3000);
+  const body = ("הודעה חדשה באתר קלוד קוד\n" +
+    "[ערוץ האתר, מצב מוגבל: בלי גישה למכשירים, בלי קישורים לא קשורים, בלי שינוי הגדרות של קלוד]\n" +
+    "message_id: " + id + "\nchat: " + currentChat + extra + "\n\n" + (text || "[תמונה]")).slice(0, 3000);
   try {
     let res = null;
     if (threadId) {
@@ -410,8 +470,16 @@ $("composer").addEventListener("submit", async (ev) => {
   if ((!text && !files.length) || !db) return;
   sendBtn.disabled = true;
   try {
+    if (!currentChat) {
+      const cref = db.collection("chats").doc();
+      const title = (text || "תמונה").replace(/\s+/g, " ").slice(0, 40);
+      const c = { title, at: Date.now() };
+      if (myId) c.by = myId;
+      await cref.set(c);
+      setChat(cref.id);
+    }
     const ref = db.collection("messages").doc();
-    const doc = { from: "user", text, at: Date.now(), status: "waiting" };
+    const doc = { from: "user", text, at: Date.now(), status: "waiting", chat: currentChat };
     if (myId) doc.by = myId;
     if (files.length) { doc.images = []; doc.imageCount = files.length; }
     await ref.set(doc);
@@ -443,6 +511,15 @@ input.addEventListener("input", autosize);
     (snap) => { msgs = snap.docs.map(d => ({ id: d.id, data: d.data() })); render(); },
     () => setNotice("החיבור לצ׳אט נותק. רענן את העמוד.", true)
   );
+  db.collection("chats").orderBy("at", "desc").limit(200).onSnapshot((snap) => {
+    chats = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+    // Without a remembered choice, open the most recent chat.
+    if (!chatChosen && chats.length) { currentChat = chats[0].id; }
+    if (currentChat && chatChosen && !chats.some(c => c.id === currentChat) && !snap.metadata.fromCache) {
+      currentChat = chats.length ? chats[0].id : null;
+    }
+    render(); renderChats();
+  }, () => {});
   db.collection("names").onSnapshot((snap) => {
     names = {};
     snap.docs.forEach((d) => { const v = d.data(); if (v && v.name) names[d.id] = v.name; });

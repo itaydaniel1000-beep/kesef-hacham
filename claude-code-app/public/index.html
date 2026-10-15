@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>קלוד קוד</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Layout: a single reading column like a Claude conversation — your messages in soft bubbles, Claude's answers as plain text, a rounded composer docked at the bottom. */
+:root {
+  --bg: #faf9f5;
+  --fg: #1f1e1d;
+  --muted: #73726c;
+  --line: #e3e0d6;
+  --bubble: #efece3;
+  --composer: #ffffff;
+  --code-bg: #f1efe8;
+  --accent: #c96442;
+  --accent-fg: #ffffff;
+  --body: "Heebo", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #262624; --fg: #f3f1ea; --muted: #a29f96; --line: #3d3c38; --bubble: #141413;
+    --composer: #30302e; --code-bg: #1d1d1b; --accent: #d97757; --accent-fg: #1a1918;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #262624; --fg: #f3f1ea; --muted: #a29f96; --line: #3d3c38; --bubble: #141413;
+  --composer: #30302e; --code-bg: #1d1d1b; --accent: #d97757; --accent-fg: #1a1918;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px;
+  display: flex; flex-direction: column;
+}
+.col {
+  width: 100%; max-width: 740px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header .col { padding-block: 10px; display: flex; align-items: center; gap: 8px; position: relative; }
+header h1 { margin-inline-end: auto; }
+.hbtn {
+  font: inherit; font-size: .88rem; color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.hbtn:hover { background: var(--bubble); }
+.hbtn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.chats {
+  position: absolute; top: calc(100% + 4px); inset-inline-end: max(16px, env(safe-area-inset-right, 0px)); z-index: 5;
+  width: min(320px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto; background: var(--composer);
+  border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+.chats button {
+  display: block; width: 100%; text-align: start; font: inherit; font-size: .92rem; color: var(--fg); background: none;
+  border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chats button:hover, .chats button[aria-current="true"] { background: var(--bubble); }
+.chat-row { display: flex; align-items: center; gap: 2px; border-radius: 10px; }
+.chat-row:hover, .chat-row.current { background: var(--bubble); }
+.chat-row > button:first-child { flex: 1; min-width: 0; }
+.chats .chat-row button:hover { background: none; }
+.chats .rename { flex: none; width: 32px; padding: 6px; color: var(--muted); display: grid; place-items: center; }
+.chats .rename:hover { color: var(--fg); }
+.chat-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: .92rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin: 2px;
+}
+.chats .none { color: var(--muted); font-size: .88rem; padding: 9px 12px; }
+h1 { font-size: .95rem; font-weight: 500; margin: 0; color: var(--muted); }
+
+main { flex: 1; overflow-y: auto; }
+#log { padding-block: 16px 32px; display: flex; flex-direction: column; gap: 22px; }
+.empty { color: var(--muted); line-height: 1.7; margin-top: 18vh; text-align: center; }
+.empty strong { display: block; color: var(--fg); font-size: 1.5rem; font-weight: 500; margin-bottom: 6px; }
+
+.turn-user { align-self: flex-start; max-width: 85%; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sender { font-size: .78rem; color: var(--muted); padding-inline: 6px; }
+.bubble {
+  background: var(--bubble); border-radius: 18px; padding: 10px 16px; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.turn-claude { min-width: 0; line-height: 1.75; overflow-wrap: anywhere; }
+.turn-claude > :first-child { margin-top: 0; }
+.turn-claude > :last-child { margin-bottom: 0; }
+.turn-claude p { margin: 0 0 .8em; }
+.turn-claude h2, .turn-claude h3, .turn-claude h4 { font-weight: 700; margin: 1.1em 0 .4em; line-height: 1.35; text-wrap: balance; }
+.turn-claude h2 { font-size: 1.2rem; } .turn-claude h3 { font-size: 1.08rem; } .turn-claude h4 { font-size: 1rem; }
+.turn-claude ul, .turn-claude ol { margin: 0 0 .8em; padding-inline-start: 1.4em; }
+.turn-claude li { margin: .2em 0; }
+.turn-claude code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); border-radius: 5px; padding: 1px 5px; }
+.turn-claude pre {
+  font-family: var(--mono); font-size: .85rem; line-height: 1.55; direction: ltr; text-align: left;
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  overflow-x: auto; margin: 0 0 .9em; white-space: pre;
+}
+.turn-claude pre code { background: none; padding: 0; font-size: inherit; }
+.turn-claude a { color: var(--accent); }
+.turn-claude hr { border: 0; border-top: 1px solid var(--line); margin: 1em 0; }
+
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .92rem; }
+.spark { width: 18px; height: 18px; color: var(--accent); animation: spin 2.4s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spark { animation: none; } }
+
+footer .col { padding-block: 8px 14px; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+.composer {
+  display: flex; align-items: flex-end; gap: 8px; background: var(--composer); border: 1px solid var(--line);
+  border-radius: 20px; padding: 10px 10px 10px 12px; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.composer:focus-within { border-color: var(--muted); }
+textarea {
+  flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--fg);
+  font: inherit; line-height: 1.5; padding: 6px 6px; max-height: 40vh; min-height: 24px;
+}
+.send {
+  width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.send:disabled { opacity: .4; cursor: default; }
+.send:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.composer { flex-wrap: wrap; }
+.attachments { flex-basis: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
+.attachments:empty { display: none; }
+.thumb { position: relative; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb button {
+  position: absolute; top: 3px; inset-inline-end: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: var(--fg); color: var(--bg); font-size: 13px; line-height: 20px; padding: 0; cursor: pointer;
+}
+.attach {
+  width: 34px; height: 34px; border-radius: 10px; border: 0; background: transparent; color: var(--muted);
+  display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.attach:hover { color: var(--fg); background: var(--bubble); }
+.attach:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.pics { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+.pics img { max-width: min(260px, 100%); max-height: 260px; border-radius: 14px; display: block; border: 1px solid var(--line); }
+.pics .pending { width: 120px; height: 90px; border-radius: 14px; background: var(--bubble); display: grid; place-items: center; color: var(--muted); font-size: .8rem; }
+.notice { font-size: .8rem; color: var(--muted); margin-top: 6px; text-align: center; min-height: 1em; }
+.notice.bad { color: var(--accent); }
+
+.chats .danger { color: var(--accent); }
+.chats .wide { width: auto; padding: 6px 10px; font-size: .82rem; }
+.turn-note { color: var(--muted); font-size: .88rem; }
+
+</style>
+</head>
+<body>
+<header><div class="col">
+  <h1>קלוד קוד</h1>
+  <button class="hbtn" id="chats-btn" type="button" aria-expanded="false" aria-controls="chats">צ׳אטים</button>
+  <button class="hbtn" id="new-chat" type="button">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    צ׳אט חדש
+  </button>
+  <div class="chats" id="chats" hidden></div>
+</div></header>
+
+<main id="log-scroll">
+  <div class="col" id="log">
+    <div class="empty" id="empty"><strong>במה אפשר לעזור?</strong>כתוב הודעה כדי להתחיל צ׳אט חדש.</div>
+  </div>
+</main>
+
+<footer>
+  <div class="col">
+    <form class="composer" id="composer">
+      <div class="attachments" id="attachments"></div>
+      <button class="attach" id="attach" type="button" aria-label="צרף תמונה" title="צרף תמונה">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+      <textarea id="input" rows="1" placeholder="כתוב הודעה לקלוד, או הדבק תמונה" aria-label="הודעה לקלוד"></textarea>
+      <button class="send" id="send" type="submit" aria-label="שלח">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+    <div class="notice" id="notice"></div>
+  </div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log"), scrollEl = $("log-scroll"), emptyEl = $("empty");
+const input = $("input"), sendBtn = $("send"), notice = $("notice");
+
+function setNotice(text, bad) { notice.textContent = text || ""; notice.classList.toggle("bad", !!bad); }
+
+// ---- Storage: everything stays in this browser ----
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch { setNotice("אין מספיק מקום בדפדפן. מחק צ׳אטים ישנים או תמונות.", true); return false; }
+  },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+let chats = store.get("cc.chats", []);           // [{id, title, at, titleByUser}]
+let currentChat = store.get("cc.current", null); // id or null for a new chat
+if (currentChat && !chats.some(c => c.id === currentChat)) currentChat = null;
+let msgs = currentChat ? store.get("cc.msgs." + currentChat, []) : [];
+let pending = [], busy = false;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const saveChats = () => store.set("cc.chats", chats);
+const saveMsgs = () => currentChat && store.set("cc.msgs." + currentChat, msgs);
+
+function setChat(id) {
+  currentChat = id;
+  store.set("cc.current", id);
+  msgs = id ? store.get("cc.msgs." + id, []) : [];
+  render(); renderChats();
+}
+
+// ---- Markdown for Claude's answers (escaped first, then a small safe subset) ----
+function esc(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+}
+function markdown(src) {
+  const lines = String(src || "").replace(/\r/g, "").split("\n");
+  let html = "", i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^```/.test(l)) {
+      const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++; html += "<pre><code>" + esc(buf.join("\n")) + "</code></pre>"; continue;
+    }
+    let m;
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { const n = Math.min(4, m[1].length + 1); html += `<h${n}>${inline(m[2])}</h${n}>`; i++; continue; }
+    if (/^\s*([-*]{3,})\s*$/.test(l)) { html += "<hr>"; i++; continue; }
+    if (/^\s*[-*]\s+/.test(l)) {
+      html += "<ul>";
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) html += "<li>" + inline(lines[i++].replace(/^\s*[-*]\s+/, "")) + "</li>";
+      html += "</ul>"; continue;
+    }
+    if (/^\s*\d+[.)]\s+/.test(l)) {
+      html += "<ol>";
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) html += "<li>" + inline(lines[i++].replace(/^\s*\d+[.)]\s+/, "")) + "</li>";
+      html += "</ol>"; continue;
+    }
+    if (!l.trim()) { i++; continue; }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|\s*[-*]\s+|\s*\d+[.)]\s+)/.test(lines[i])) para.push(inline(lines[i++]));
+    html += "<p>" + para.join("<br>") + "</p>";
+  }
+  return html;
+}
+
+
+
+// ---- Rendering ----
+const SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l1.6 6.1L19 5l-3.1 5.4L22 12l-6.1 1.6L19 19l-5.4-3.1L12 22l-1.6-6.1L5 19l3.1-5.4L2 12l6.1-1.6L5 5l5.4 3.1z"/></svg>';
+function render() {
+  emptyEl.hidden = msgs.length > 0;
+  const atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 120;
+  [...logEl.querySelectorAll(".turn")].forEach(n => n.remove());
+  for (const m of msgs) {
+    const el = document.createElement("div");
+    if (m.role === "assistant") {
+      if (!m.text && m.status === "streaming") continue;
+      el.className = "turn turn-claude";
+      el.innerHTML = markdown(m.text || "");
+      if (m.status && m.status !== "streaming" && m.status !== "done") {
+        const n = document.createElement("p"); n.className = "turn-note"; n.textContent = STATUS_TEXT[m.status] || STATUS_TEXT.err; el.append(n);
+      }
+    } else {
+      el.className = "turn turn-user";
+      if (m.images && m.images.length) {
+        const pics = document.createElement("div"); pics.className = "pics";
+        for (const src of m.images) { const im = document.createElement("img"); im.src = src; im.alt = "תמונה שצורפה"; pics.append(im); }
+        el.append(pics);
+      }
+      if (m.text) { const b = document.createElement("div"); b.className = "bubble"; b.textContent = m.text; el.append(b); }
+    }
+    logEl.append(el);
+  }
+  const last = msgs[msgs.length - 1];
+  if (last && last.role === "assistant" && last.status === "streaming" && !last.text) {
+    const t = document.createElement("div"); t.className = "turn thinking";
+    t.innerHTML = SPARK + "<span>קלוד חושב…</span>"; logEl.append(t);
+  }
+  if (atBottom) scrollEl.scrollTop = scrollEl.scrollHeight;
+}
+const STATUS_TEXT = {
+  refusal: "קלוד לא יכול לעזור בבקשה הזו.",
+  cut: "התשובה נקטעה כי הייתה ארוכה מדי.",
+  auth: "מפתח ה-API של האתר לא תקין. צריך לבדוק את ANTHROPIC_API_KEY בהגדרות של Netlify.",
+  rate_limited: "יותר מדי בקשות כרגע. נסה שוב בעוד דקה.",
+  connection: "אין חיבור לשרת. בדוק את האינטרנט ונסה שוב.",
+  err: "משהו השתבש. נסה לשלוח שוב.",
+};
+
+// ---- Chat list: switch, rename, delete ----
+const PENCIL = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+const TRASH = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+let renaming = null, confirmDelete = null;
+function renderChats() {
+  const box = $("chats");
+  box.textContent = "";
+  if (!chats.length) { const n = document.createElement("div"); n.className = "none"; n.textContent = "עוד אין צ׳אטים"; box.append(n); return; }
+  for (const c of [...chats].sort((a, b) => b.at - a.at)) {
+    const row = document.createElement("div");
+    row.className = "chat-row" + (c.id === currentChat ? " current" : "");
+    if (renaming === c.id) {
+      const inp = document.createElement("input");
+      inp.id = "rename-" + c.id; inp.value = c.title || ""; inp.maxLength = 60; inp.setAttribute("aria-label", "שם הצ׳אט");
+      let done = false;
+      const save = () => {
+        if (done) return; done = true;
+        const t = inp.value.replace(/\s+/g, " ").trim();
+        if (t) { c.title = t; c.titleByUser = true; saveChats(); }
+        renaming = null; renderChats();
+      };
+      inp.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); save(); }
+        if (ev.key === "Escape") { done = true; renaming = null; renderChats(); }
+      });
+      inp.addEventListener("blur", save);
+      row.append(inp); box.append(row);
+      setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      continue;
+    }
+    const b = document.createElement("button"); b.type = "button"; b.textContent = c.title || "צ׳אט חדש";
+    if (c.id === currentChat) b.setAttribute("aria-current", "true");
+    b.addEventListener("click", () => { setChat(c.id); toggleChats(false); });
+    const r = document.createElement("button"); r.type = "button"; r.className = "rename"; r.innerHTML = PENCIL;
+    r.setAttribute("aria-label", "שנה שם"); r.title = "שנה שם";
+    r.addEventListener("click", (ev) => { ev.stopPropagation(); renaming = c.id; confirmDelete = null; renderChats(); });
+    const d = document.createElement("button"); d.type = "button"; d.className = "rename" + (confirmDelete === c.id ? " danger" : "");
+    if (confirmDelete === c.id) { d.textContent = "למחוק?"; d.classList.add("wide"); } else d.innerHTML = TRASH;
+    d.setAttribute("aria-label", confirmDelete === c.id ? "אשר מחיקה" : "מחק צ׳אט"); d.title = d.getAttribute("aria-label");
+    d.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (confirmDelete !== c.id) { confirmDelete = c.id; renderChats(); return; }
+      confirmDelete = null;
+      chats = chats.filter(x => x.id !== c.id); saveChats(); store.del("cc.msgs." + c.id);
+      if (currentChat === c.id) setChat(null); else renderChats();
+    });
+    row.append(b, r, d); box.append(row);
+  }
+}
+function toggleChats(open) {
+  const box = $("chats"), btn = $("chats-btn");
+  const show = open === undefined ? box.hidden : open;
+  box.hidden = !show; btn.setAttribute("aria-expanded", String(show));
+  if (!show) { renaming = null; confirmDelete = null; }
+  if (show) renderChats();
+}
+$("chats-btn").addEventListener("click", (ev) => { ev.stopPropagation(); toggleChats(); });
+$("chats").addEventListener("click", (ev) => ev.stopPropagation());
+$("new-chat").addEventListener("click", () => { setChat(null); toggleChats(false); input.focus(); });
+document.addEventListener("click", () => { if (!$("chats").hidden) toggleChats(false); });
+
+// ---- Pictures: paste, attach or drop; shrunk before they are stored ----
+const attachEl = $("attachments"), fileEl = $("file");
+const OK_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+function shrink(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const max = 1568, k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
+}
+function renderPending() {
+  attachEl.textContent = "";
+  pending.forEach((src, i) => {
+    const t = document.createElement("div"); t.className = "thumb";
+    const im = document.createElement("img"); im.src = src; im.alt = "";
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "הסר תמונה");
+    x.addEventListener("click", () => { pending.splice(i, 1); renderPending(); });
+    t.append(im, x); attachEl.append(t);
+  });
+}
+async function addFiles(files) {
+  let added = 0;
+  for (const f of files) {
+    if (!OK_TYPES.includes(f.type)) continue;
+    if (pending.length >= 6) { setNotice("אפשר לצרף עד 6 תמונות להודעה", true); break; }
+    try { pending.push(await shrink(f)); added++; } catch { setNotice("לא הצלחתי לקרוא את התמונה", true); }
+  }
+  if (added) renderPending();
+  return added;
+}
+input.addEventListener("paste", (ev) => {
+  const files = [...(ev.clipboardData ? ev.clipboardData.files : [])].filter(f => OK_TYPES.includes(f.type));
+  if (files.length) { ev.preventDefault(); addFiles(files); }
+});
+$("attach").addEventListener("click", () => fileEl.click());
+fileEl.addEventListener("change", () => { addFiles([...fileEl.files]); fileEl.value = ""; });
+document.addEventListener("dragover", (ev) => ev.preventDefault());
+document.addEventListener("drop", (ev) => { ev.preventDefault(); if (ev.dataTransfer && ev.dataTransfer.files.length) addFiles([...ev.dataTransfer.files]); });
+
+// ---- Talking to the server ----
+function apiMessages() {
+  return msgs.filter(m => m.role === "user" || (m.text && m.status === "done")).map(m => {
+    if (m.role === "assistant") return { role: "assistant", content: m.text };
+    const content = (m.images || []).map(src => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: src.split(",")[1] } }));
+    if (m.text) content.push({ type: "text", text: m.text });
+    return { role: "user", content };
+  });
+}
+function headers() {
+  const h = { "content-type": "application/json" };
+  const p = store.get("cc.password", "");
+  if (p) h["x-app-password"] = p;
+  return h;
+}
+async function post(body) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch("/api/chat", { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    if (res.status !== 401) return res;
+    const p = window.prompt("סיסמת האתר:");
+    if (!p) return res;
+    store.set("cc.password", p);
+  }
+  return fetch("/api/chat", { method: "POST", headers: headers(), body: JSON.stringify(body) });
+}
+
+async function nameChat(chatId, history) {
+  try {
+    const res = await post({ mode: "title", messages: history.slice(0, 1) });
+    if (!res.ok) return;
+    const { title } = await res.json();
+    const c = chats.find(x => x.id === chatId);
+    if (c && title && !c.titleByUser) { c.title = title; saveChats(); renderChats(); }
+  } catch {}
+}
+
+async function ask() {
+  const chatId = currentChat;
+  const history = apiMessages();
+  const reply = { role: "assistant", text: "", status: "streaming", at: Date.now() };
+  msgs.push(reply); render();
+  try {
+    const res = await post({ messages: history });
+    if (res.status === 401) { reply.status = "err"; setNotice("צריך סיסמה נכונה כדי לדבר עם קלוד", true); return; }
+    if (!res.ok || !res.body) { reply.status = "err"; return; }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "", ended = false;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        let ev; try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.t === "d") reply.text += ev.v;
+        else if (ev.t === "reset") reply.text = "";
+        else if (ev.t === "refusal") reply.status = "refusal";
+        else if (ev.t === "cut") reply.status = "cut";
+        else if (ev.t === "err") { reply.status = STATUS_TEXT[ev.v] ? ev.v : "err"; ended = true; }
+        else if (ev.t === "done") ended = true;
+        if (chatId === currentChat) render();
+      }
+    }
+    if (reply.status === "streaming") reply.status = ended ? "done" : "err";
+    if (reply.status === "cut") reply.status = reply.text ? "cut" : "err";
+  } catch {
+    reply.status = "connection";
+  } finally {
+    if (reply.status === "cut" && reply.text) reply.status = "cut";
+    const all = chatId === currentChat ? msgs : null;
+    if (all) { saveMsgs(); render(); }
+    else { const saved = store.get("cc.msgs." + chatId, []); saved.push(reply); store.set("cc.msgs." + chatId, saved); }
+  }
+}
+
+$("composer").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const text = input.value.trim();
+  if ((!text && !pending.length) || busy) return;
+  busy = true; sendBtn.disabled = true;
+  let isFirst = false;
+  if (!currentChat) {
+    const c = { id: uid(), title: "צ׳אט חדש", at: Date.now() };
+    chats.push(c); saveChats(); currentChat = c.id; store.set("cc.current", c.id); msgs = []; isFirst = true;
+  } else {
+    const c = chats.find(x => x.id === currentChat); if (c) { c.at = Date.now(); saveChats(); }
+  }
+  msgs.push({ role: "user", text, images: pending.slice(), at: Date.now() });
+  if (!saveMsgs()) { msgs.pop(); busy = false; sendBtn.disabled = false; return; }
+  input.value = ""; autosize(); pending = []; renderPending(); setNotice("");
+  renderChats(); render();
+  if (isFirst) nameChat(currentChat, apiMessages());
+  try { await ask(); } finally { busy = false; sendBtn.disabled = false; input.focus(); }
+});
+input.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("composer").requestSubmit(); }
+});
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + "px"; }
+input.addEventListener("input", autosize);
+
+render(); renderChats();
+
+</script>
+</body>
+</html>

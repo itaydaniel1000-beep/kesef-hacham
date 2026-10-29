@@ -1,9 +1,0 @@
-{
-  "name": "claude-code-app",
-  "private": true,
-  "type": "module",
-  "description": "צ׳אט עם Claude שרץ על Netlify",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.134.0"
-  }
-}

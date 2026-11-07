@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>משבט הקול</title>
+<style>
+  :root {
+    --bg: #f4f7fb;
+    --surface: #ffffff;
+    --ink: #16233a;
+    --ink-soft: #5a6b86;
+    --brand: #1f7a5a;
+    --brand-soft: #e4f4ed;
+    --danger: #d94a4a;
+    --danger-soft: #fdeaea;
+    --line: #e2e8f2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1622;
+      --surface: #182233;
+      --ink: #e8eef8;
+      --ink-soft: #9aa9c0;
+      --brand: #3fb488;
+      --brand-soft: #16362b;
+      --danger: #ef6b6b;
+      --danger-soft: #3a1c1c;
+      --line: #2a374c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, "Segoe UI", Arial, sans-serif;
+  }
+  .wrap { width: min(680px, 100%); margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { margin: 0 0 4px; font-size: 1.7rem; }
+  .sub { margin: 0 0 20px; color: var(--ink-soft); }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px; margin-bottom: 14px;
+  }
+  .card h2 { margin: 0 0 10px; font-size: 1.1rem; display: flex; gap: 8px; align-items: center; }
+  .num {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff;
+    display: inline-grid; place-items: center; font-size: .85rem; flex: none;
+  }
+  .card.locked { opacity: .5; pointer-events: none; }
+  label { display: block; font-weight: 600; margin: 10px 0 4px; }
+  input[type=text], input[type=password], textarea {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit;
+  }
+  input.ltr { direction: ltr; text-align: left; }
+  textarea { min-height: 110px; resize: vertical; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 10px 16px;
+    background: var(--brand); color: #fff; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button.danger { background: var(--danger); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .hint { font-size: .88rem; color: var(--ink-soft); margin: 6px 0 0; }
+  .script {
+    background: var(--brand-soft); border-radius: 10px; padding: 12px; margin: 8px 0;
+    font-size: .95rem;
+  }
+  .rec-dot {
+    width: 12px; height: 12px; border-radius: 50%; background: var(--danger);
+    animation: pulse 1s infinite; display: none;
+  }
+  .recording .rec-dot { display: inline-block; }
+  @keyframes pulse { 50% { opacity: .2; } }
+  .timer { font-variant-numeric: tabular-nums; direction: ltr; }
+  .clips { list-style: none; padding: 0; margin: 10px 0 0; }
+  .clips li {
+    display: flex; gap: 8px; align-items: center; padding: 6px 0;
+    border-top: 1px solid var(--line);
+  }
+  .clips audio { flex: 1; min-width: 0; height: 36px; }
+  audio { width: 100%; }
+  .status { margin-top: 10px; font-size: .92rem; }
+  .status.err { color: var(--danger); }
+  .status.ok { color: var(--brand); }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+  .check input { margin-top: 5px; }
+  select {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ משבט הקול</h1>
+  <p class="sub">מקליטים את הקול שלכם, ואז מקלידים כל משפט והוא נשמע בקול שלכם.</p>
+
+  <!-- 1. מפתח -->
+  <section class="card" id="stepKey">
+    <h2><span class="num">1</span> מפתח ElevenLabs</h2>
+    <input type="password" id="apiKey" class="ltr" placeholder="sk_..." autocomplete="off">
+    <p class="hint">יוצרים מפתח ב-elevenlabs.io תחת Developers ← API Keys. המפתח נשמר רק בדפדפן הזה.
+      שיבוט קול דורש מנוי Starter ומעלה.</p>
+    <div class="row">
+      <button id="saveKey">שמירה ובדיקה</button>
+      <button class="ghost" id="clearKey">מחיקת המפתח</button>
+    </div>
+    <div class="status" id="keyStatus"></div>
+  </section>
+
+  <!-- 2. הקלטה -->
+  <section class="card locked" id="stepRecord">
+    <h2><span class="num">2</span> הקלטת הקול</h2>
+    <p class="hint" style="margin-top:0">כדאי להקליט לפחות 30 שניות בחדר שקט. ככל שיש יותר הקלטה, הדמיון טוב יותר. אפשר להקריא את זה:</p>
+    <div class="script">
+      שלום, קוראים לי כמו שקוראים לי, ואני מקליט את הקול שלי כדי לבדוק משהו מגניב.
+      היום בבוקר קמתי, שתיתי כוס מים, ויצאתי לטייל בפארק ליד הבית.
+      ראיתי ילדים משחקים בכדור, כלב רץ אחרי ציפור, ואיש זקן שקורא עיתון על ספסל.
+      אחר כך הלכתי למכולת וקניתי לחם, חלב וקצת פירות. כמה זה עלה? בערך שלושים שקלים.
+      אני אוהב ימים כאלה, רגועים ופשוטים. נכון שזה נחמד?
+    </div>
+    <div class="row" id="recRow">
+      <button id="recBtn">⏺ התחלת הקלטה</button>
+      <span class="rec-dot"></span>
+      <span class="timer" id="timer">0:00</span>
+      <label class="ghost" style="margin:0;font-weight:400">
+        או <input type="file" id="fileIn" accept="audio/*" multiple style="font-size:.85rem">
+      </label>
+    </div>
+    <ul class="clips" id="clips"></ul>
+    <p class="hint" id="totalLen"></p>
+
+    <label for="voiceName">שם לקול</label>
+    <input type="text" id="voiceName" placeholder="למשל: הקול שלי">
+    <label class="check">
+      <input type="checkbox" id="consent">
+      <span>זה הקול שלי, או שבעל הקול נתן לי רשות מפורשת לשבט אותו.</span>
+    </label>
+    <div class="row">
+      <button id="cloneBtn" disabled>🧬 יצירת הקול</button>
+    </div>
+    <div class="status" id="cloneStatus"></div>
+  </section>
+
+  <!-- 3. דיבור -->
+  <section class="card locked" id="stepSpeak">
+    <h2><span class="num">3</span> שהקול יגיד משהו</h2>
+    <label for="voiceSelect">איזה קול</label>
+    <select id="voiceSelect"></select>
+    <label for="text">מה להגיד</label>
+    <textarea id="text" placeholder="הקלידו כאן כל משפט, בעברית או בכל שפה אחרת"></textarea>
+    <div class="row">
+      <button id="speakBtn">🔊 תגיד את זה</button>
+      <button class="ghost danger" id="deleteVoice" style="color:var(--danger)">מחיקת הקול מהחשבון</button>
+    </div>
+    <div class="status" id="speakStatus"></div>
+    <audio id="out" controls hidden></audio>
+    <div class="row"><a id="download" hidden download="voice.mp3">⬇ הורדת הקובץ</a></div>
+  </section>
+</div>
+
+<script>
+const API = "https://api.elevenlabs.io/v1";
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+
+let apiKey = store.get("vc_key") || "";
+const clips = []; // {blob, seconds, url}
+
+function setStatus(el, msg, kind = "") {
+  el.textContent = msg;
+  el.className = "status " + kind;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { "xi-api-key": apiKey, ...(opts.headers || {}) }
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j.detail?.message || j.detail?.status || JSON.stringify(j.detail || j);
+    } catch { detail = res.statusText; }
+    const e = new Error(`${res.status}: ${detail}`);
+    e.status = res.status;
+    throw e;
+  }
+  return res;
+}
+
+/* ---------- 1. מפתח ---------- */
+
+async function checkKey() {
+  setStatus($("keyStatus"), "בודק...");
+  try {
+    await loadVoices();
+    setStatus($("keyStatus"), "✅ המפתח עובד", "ok");
+    $("stepRecord").classList.remove("locked");
+    return true;
+  } catch (e) {
+    setStatus($("keyStatus"), "❌ המפתח לא עובד (" + e.message + ")", "err");
+    return false;
+  }
+}
+
+$("saveKey").onclick = async () => {
+  apiKey = $("apiKey").value.trim();
+  if (!apiKey) return;
+  if (await checkKey()) store.set("vc_key", apiKey);
+};
+$("clearKey").onclick = () => {
+  store.del("vc_key"); apiKey = ""; $("apiKey").value = "";
+  setStatus($("keyStatus"), "המפתח נמחק מהדפדפן");
+  $("stepRecord").classList.add("locked");
+  $("stepSpeak").classList.add("locked");
+};
+
+/* ---------- 2. הקלטה ---------- */
+
+let recorder = null, chunks = [], startedAt = 0, tick = null;
+
+$("recBtn").onclick = async () => {
+  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+  } catch {
+    setStatus($("cloneStatus"), "אין גישה למיקרופון. צריך לאשר הרשאה בדפדפן.", "err");
+    return;
+  }
+  chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    clearInterval(tick);
+    $("recRow").classList.remove("recording");
+    $("recBtn").textContent = "⏺ הקלטה נוספת";
+    const raw = new Blob(chunks, { type: recorder.mimeType });
+    await addClip(raw);
+  };
+  recorder.start();
+  startedAt = Date.now();
+  $("recRow").classList.add("recording");
+  $("recBtn").textContent = "⏹ עצירה";
+  tick = setInterval(() => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    $("timer").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }, 250);
+};
+
+$("fileIn").onchange = async e => {
+  for (const f of e.target.files) await addClip(f);
+  e.target.value = "";
+};
+
+/* ממירים כל הקלטה ל-WAV מונו, כי זה הפורמט שהכי בטוח שיתקבל */
+async function toWav(blob) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+  ctx.close();
+  const rate = buf.sampleRate, len = buf.length;
+  const mono = new Float32Array(len);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) mono[i] += d[i] / buf.numberOfChannels;
+  }
+  const out = new DataView(new ArrayBuffer(44 + len * 2));
+  const w = (o, s) => [...s].forEach((ch, i) => out.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, "RIFF"); out.setUint32(4, 36 + len * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true);
+  out.setUint16(32, 2, true); out.setUint16(34, 16, true); w(36, "data");
+  out.setUint32(40, len * 2, true);
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i]));
+    out.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return { blob: new Blob([out], { type: "audio/wav" }), seconds: buf.duration };
+}
+
+async function addClip(raw) {
+  try {
+    const { blob, seconds } = await toWav(raw);
+    clips.push({ blob, seconds, url: URL.createObjectURL(blob) });
+    renderClips();
+  } catch {
+    setStatus($("cloneStatus"), "לא הצלחתי לקרוא את קובץ השמע הזה.", "err");
+  }
+}
+
+function renderClips() {
+  const ul = $("clips");
+  ul.innerHTML = "";
+  clips.forEach((c, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${Math.round(c.seconds)} שנ׳</span><audio controls src="${c.url}"></audio>`;
+    const del = document.createElement("button");
+    del.className = "ghost"; del.textContent = "✕";
+    del.onclick = () => { URL.revokeObjectURL(c.url); clips.splice(i, 1); renderClips(); };
+    li.append(del);
+    ul.append(li);
+  });
+  const total = clips.reduce((a, c) => a + c.seconds, 0);
+  $("totalLen").textContent = clips.length
+    ? `סה״כ ${Math.round(total)} שניות` + (total < 30 ? " (מומלץ להגיע ל-30 לפחות)" : " 👍")
+    : "";
+  updateCloneBtn();
+}
+
+function updateCloneBtn() {
+  $("cloneBtn").disabled = !(clips.length && $("consent").checked && $("voiceName").value.trim());
+}
+$("consent").onchange = updateCloneBtn;
+$("voiceName").oninput = updateCloneBtn;
+
+$("cloneBtn").onclick = async () => {
+  const fd = new FormData();
+  fd.append("name", $("voiceName").value.trim());
+  fd.append("remove_background_noise", "true");
+  fd.append("description", "נוצר בדף משבט הקול");
+  clips.forEach((c, i) => fd.append("files", c.blob, `sample-${i + 1}.wav`));
+  $("cloneBtn").disabled = true;
+  setStatus($("cloneStatus"), "יוצר את הקול... זה לוקח כמה שניות");
+  try {
+    const res = await api("/voices/add", { method: "POST", body: fd });
+    const { voice_id } = await res.json();
+    store.set("vc_last", voice_id);
+    await loadVoices();
+    setStatus($("cloneStatus"), "✅ הקול מוכן! עברו לשלב 3", "ok");
+    $("stepSpeak").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    const tip = e.status === 401 || e.status === 403
+      ? " (ייתכן שהמנוי לא כולל שיבוט קול)" : "";
+    setStatus($("cloneStatus"), "❌ " + e.message + tip, "err");
+  } finally {
+    updateCloneBtn();
+  }
+};
+
+/* ---------- 3. דיבור ---------- */
+
+async function loadVoices() {
+  const res = await api("/voices");
+  const { voices } = await res.json();
+  const mine = voices.filter(v => v.category === "cloned");
+  const sel = $("voiceSelect");
+  sel.innerHTML = "";
+  mine.forEach(v => sel.add(new Option(v.name, v.voice_id)));
+  const last = store.get("vc_last");
+  if (last && mine.some(v => v.voice_id === last)) sel.value = last;
+  $("stepSpeak").classList.toggle("locked", !mine.length);
+}
+
+async function tts(voiceId, text, model) {
+  return api(`/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text, model_id: model,
+      voice_settings: { stability: 0.5, similarity_boost: 0.9, style: 0.2 }
+    })
+  });
+}
+
+$("speakBtn").onclick = async () => {
+  const voiceId = $("voiceSelect").value;
+  const text = $("text").value.trim();
+  if (!voiceId || !text) return;
+  $("speakBtn").disabled = true;
+  setStatus($("speakStatus"), "מייצר...");
+  try {
+    let res;
+    try {
+      res = await tts(voiceId, text, "eleven_v3");
+    } catch (e) {
+      // אם v3 לא זמין בחשבון, מנסים את המודל הרב-לשוני הקודם
+      if (e.status === 400 || e.status === 422) res = await tts(voiceId, text, "eleven_multilingual_v2");
+      else throw e;
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const out = $("out");
+    out.src = url; out.hidden = false; out.play();
+    $("download").href = url; $("download").hidden = false;
+    setStatus($("speakStatus"), "");
+  } catch (e) {
+    setStatus($("speakStatus"), "❌ " + e.message, "err");
+  } finally {
+    $("speakBtn").disabled = false;
+  }
+};
+
+$("deleteVoice").onclick = async () => {
+  const sel = $("voiceSelect");
+  if (!sel.value) return;
+  if (!confirm(`למחוק את הקול "${sel.selectedOptions[0].text}" מהחשבון?`)) return;
+  try {
+    await api(`/voices/${sel.value}`, { method: "DELETE" });
+    await loadVoices();
+    setStatus($("speakStatus"), "הקול נמחק", "ok");
+  } catch (e) {
+    setStatus($("speakStatus"), "❌ " + e.message, "err");
+  }
+};
+
+/* ---------- התחלה ---------- */
+if (apiKey) { $("apiKey").value = apiKey; checkKey(); }
+</script>
+</body>
+</html>

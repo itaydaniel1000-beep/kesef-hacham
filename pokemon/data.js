@@ -45,37 +45,40 @@ const TYPE_CHART = {
   fairy:    {fire: .5, fighting: 2, poison: .5, dragon: 2, dark: 2, steel: .5}
 };
 
-/* hp = חיים בסיסיים (מוכפלים ב-CONFIG.hpScale)
+/* dex = המספר בפוקידקס - לפיו נטענת התמונה
+   hp = חיים בסיסיים (מוכפלים ב-CONFIG.hpScale)
    power = כמה חיים הוא מוריד בתקיפה רגילה (×1)
    catch = סיכוי התפיסה כשהוא בחיים מלאים */
 const POKEMON = {
   // התחלתיים
-  bulbasaur:  {he: "בולבזאור",   types: ["grass", "poison"],   hp: 45,  power: 22},
-  charmander: {he: "צ'רמנדר",    types: ["fire"],              hp: 39,  power: 20},
-  squirtle:   {he: "סקווירטל",   types: ["water"],             hp: 44,  power: 17},
-  pikachu:    {he: "פיקאצ'ו",    types: ["electric"],          hp: 35,  power: 18},
-  eevee:      {he: "איווי",      types: ["normal"],            hp: 55,  power: 18},
+  bulbasaur:  {dex: 1, he: "בולבזאור",   types: ["grass", "poison"],   hp: 45,  power: 22},
+  charmander: {dex: 4, he: "צ'רמנדר",    types: ["fire"],              hp: 39,  power: 20},
+  squirtle:   {dex: 7, he: "סקווירטל",   types: ["water"],             hp: 44,  power: 17},
+  pikachu:    {dex: 25, he: "פיקאצ'ו",    types: ["electric"],          hp: 35,  power: 18},
+  eevee:      {dex: 133, he: "איווי",      types: ["normal"],            hp: 55,  power: 18},
 
   // פראיים בחבילה
-  pidgey:     {he: "פידג'י",     types: ["normal", "flying"],  hp: 40,  power: 15, catch: .45},
-  rattata:    {he: "ראטאטה",     types: ["normal"],            hp: 30,  power: 19, catch: .50},
-  caterpie:   {he: "קטרפי",      types: ["bug"],               hp: 45,  power: 10, catch: .55},
-  oddish:     {he: "אודיש",      types: ["grass", "poison"],   hp: 45,  power: 25, catch: .40},
-  gastly:     {he: "גאסטלי",     types: ["ghost", "poison"],   hp: 30,  power: 33, catch: .30},
-  jigglypuff: {he: "ג'יגליפאף",  types: ["normal", "fairy"],   hp: 115, power: 15, catch: .40},
-  machop:     {he: "מאצ'ופ",     types: ["fighting"],          hp: 70,  power: 27, catch: .35},
-  geodude:    {he: "ג'אודוד",    types: ["rock", "ground"],    hp: 40,  power: 27, catch: .35},
-  psyduck:    {he: "פסיידאק",    types: ["water"],             hp: 50,  power: 22, catch: .40},
-  vulpix:     {he: "וולפיקס",    types: ["fire"],              hp: 38,  power: 17, catch: .40},
-  abra:       {he: "אברה",       types: ["psychic"],           hp: 25,  power: 35, catch: .30},
-  magnemite:  {he: "מגנמייט",    types: ["electric", "steel"], hp: 25,  power: 32, catch: .35},
-  dratini:    {he: "דרטיני",     types: ["dragon"],            hp: 41,  power: 21, catch: .25},
-  snorlax:    {he: "סנורלקס",    types: ["normal"],            hp: 160, power: 37, catch: .15},
-  lapras:     {he: "לאפרס",      types: ["water", "ice"],      hp: 130, power: 28, catch: .20},
+  pidgey:     {dex: 16, he: "פידג'י",     types: ["normal", "flying"],  hp: 40,  power: 15, catch: .45},
+  rattata:    {dex: 19, he: "ראטאטה",     types: ["normal"],            hp: 30,  power: 19, catch: .50},
+  caterpie:   {dex: 10, he: "קטרפי",      types: ["bug"],               hp: 45,  power: 10, catch: .55},
+  oddish:     {dex: 43, he: "אודיש",      types: ["grass", "poison"],   hp: 45,  power: 25, catch: .40},
+  gastly:     {dex: 92, he: "גאסטלי",     types: ["ghost", "poison"],   hp: 30,  power: 33, catch: .30},
+  jigglypuff: {dex: 39, he: "ג'יגליפאף",  types: ["normal", "fairy"],   hp: 115, power: 15, catch: .40},
+  machop:     {dex: 66, he: "מאצ'ופ",     types: ["fighting"],          hp: 70,  power: 27, catch: .35},
+  geodude:    {dex: 74, he: "ג'אודוד",    types: ["rock", "ground"],    hp: 40,  power: 27, catch: .35},
+  psyduck:    {dex: 54, he: "פסיידאק",    types: ["water"],             hp: 50,  power: 22, catch: .40},
+  vulpix:     {dex: 37, he: "וולפיקס",    types: ["fire"],              hp: 38,  power: 17, catch: .40},
+  abra:       {dex: 63, he: "אברה",       types: ["psychic"],           hp: 25,  power: 35, catch: .30},
+  magnemite:  {dex: 81, he: "מגנמייט",    types: ["electric", "steel"], hp: 25,  power: 32, catch: .35},
+  dratini:    {dex: 147, he: "דרטיני",     types: ["dragon"],            hp: 41,  power: 21, catch: .25},
+  snorlax:    {dex: 143, he: "סנורלקס",    types: ["normal"],            hp: 160, power: 37, catch: .15},
+  lapras:     {dex: 131, he: "לאפרס",      types: ["water", "ice"],      hp: 130, power: 28, catch: .20},
 
   // הקרב האחרון
-  mewtwo:     {he: "מיוטו",      types: ["psychic"],           hp: 106, power: 51}
+  mewtwo:     {dex: 150, he: "מיוטו",      types: ["psychic"],           hp: 106, power: 51}
 };
+
+const ART_URL = n => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${n}.png`;
 
 const STARTERS = ["bulbasaur", "charmander", "squirtle", "pikachu", "eevee"];
 

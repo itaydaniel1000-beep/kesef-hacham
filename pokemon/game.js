@@ -148,7 +148,7 @@ function startBoss() {
   S.wild = {id: b.id, hp, maxHp: hp, boss: true};
   if (b.healBefore) healAll();
   log("הקרב האחרון!");
-  showMessage("הקרב האחרון!", `החבילה נגמרה. ${POKEMON[b.id].he} מופיע. אם תנצחו - כולם מנצחים את ההרפתקה. אם כל הפוקימונים יתעלפו - כולם מפסידים.${b.healBefore ? " לפני הקרב כל הפוקימונים מתרפאים." : ""}`, "roundRoll");
+  showMessage("הקרב האחרון!", `החבילה נגמרה. ${POKEMON[b.id].he} מופיע. אם תנצחו - כולם מנצחים את ההרפתקה. אם לאף אחד לא יישאר פוקימון חי - כולם מפסידים.${b.healBefore ? " לפני הקרב כל הפוקימונים מתרפאים." : ""}`, "roundRoll");
 }
 
 function startTurns() {
@@ -225,14 +225,10 @@ function healAll() {
 }
 
 /* תור הפוקימון הפראי: תוקף פוקימון חי אקראי.
-   הבוס תוקף פעם אחת לכל שחקן. */
+   הבוס תוקף פעם אחת לכל שחקן.
+   אם לאף שחקן לא נשאר פוקימון חי - כולם מפסידים. */
 function wildTurn() {
-  if (!anyAlive()) {
-    if (S.wild.boss) return endGame(false);
-    healAll();
-    log("כל הפוקימונים התעלפו - מרפאה");
-    return showMessage("כל הפוקימונים התעלפו", "אין לאף אחד פוקימון חי, אז כולם רצים למרפאה.", "roundRoll");
-  }
+  if (!anyAlive()) return endGame(false);
   const hits = S.wild.boss ? S.players.length : 1;
   const lines = [];
   for (let k = 0; k < hits && anyAlive(); k++) {
@@ -245,7 +241,8 @@ function wildTurn() {
     lines.push(`תוקף את ${POKEMON[m.id].he} של ${p.name}: ‎-${dmg} (${multText(mult)})${ko}`);
     log(`${POKEMON[S.wild.id].he} ${lines[lines.length - 1]}`);
   }
-  if (S.wild.boss && !anyAlive()) {
+  // אין לאף שחקן פוקימון חי - מפסידים את ההרפתקה
+  if (!anyAlive()) {
     return showMessage(`תור של ${POKEMON[S.wild.id].he}`, lines.join("\n"), "lose");
   }
   showMessage(`תור של ${POKEMON[S.wild.id].he}`, lines.join("\n") + "\n\nמטילים שוב קוביות לסבב הבא.", "roundRoll");
@@ -311,7 +308,7 @@ function cardHTML(m, extra = "") {
   const t1 = TYPES[d.types[0]], t2 = TYPES[d.types[1] || d.types[0]];
   const dead = m.hp <= 0 ? " fainted" : "";
   return `<div class="card${dead}" style="--c1:${t1.color};--c2:${t2.color}">
-    <div class="card-art">${t1.icon}</div>
+    <div class="card-art"><img src="${ART_URL(d.dex)}" alt="${d.he}" onerror="this.replaceWith(document.createTextNode('${t1.icon}'))"></div>
     <div class="card-name">${d.he}</div>
     <div class="card-types">${typeBadges(d.types)}</div>
     ${hpBar(m)}
@@ -395,7 +392,7 @@ function renderPanel() {
       break;
     case "end":
       el.innerHTML = `<h2>${S.win ? "🏆 ניצחתם את ההרפתקה!" : "💫 הפסדתם את ההרפתקה"}</h2>
-        <p>${S.win ? `כל הכבוד! ${POKEMON[CONFIG.boss.id].he} הובס.` : "כל הפוקימונים התעלפו בקרב האחרון."} מתחילים מחדש.</p>
+        <p>${S.win ? `כל הכבוד! ${POKEMON[CONFIG.boss.id].he} הובס.` : "לאף שחקן לא נשאר פוקימון חי."} מתחילים מחדש.</p>
         <div class="row">
           <button class="btn primary" onclick="newGame(S.players.map(p => p.name))">הרפתקה חדשה</button>
           <button class="btn" onclick="resetToSetup()">שחקנים אחרים</button>
@@ -418,7 +415,7 @@ function carouselHTML(mons, onPick, withBack) {
   const disabled = m.hp <= 0 ? "disabled" : "";
   return `<div class="carousel">
       <button class="arrow" onclick="moveCarousel(-1)" aria-label="הקודם">▶</button>
-      <div class="carousel-card">${cardHTML(m, vs)}<div class="count">${ui.carousel + 1} / ${mons.length}</div></div>
+      <div class="carousel-card">${cardHTML(m, vs)}<div class="count">${ui.carousel + 1} מתוך ${mons.length}</div></div>
       <button class="arrow" onclick="moveCarousel(1)" aria-label="הבא">◀</button>
     </div>
     <div class="row">

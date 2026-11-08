@@ -226,6 +226,7 @@ function healAll() {
 
 /* תור הפוקימון הפראי: תוקף פוקימון חי אקראי.
    הבוס תוקף פעם אחת לכל שחקן.
+   פראי רגיל חוזר אחר כך לחבילה, והבוס נשאר.
    אם לאף שחקן לא נשאר פוקימון חי - כולם מפסידים. */
 function wildTurn() {
   if (!anyAlive()) return endGame(false);
@@ -245,7 +246,15 @@ function wildTurn() {
   if (!anyAlive()) {
     return showMessage(`תור של ${POKEMON[S.wild.id].he}`, lines.join("\n"), "lose");
   }
-  showMessage(`תור של ${POKEMON[S.wild.id].he}`, lines.join("\n") + "\n\nמטילים שוב קוביות לסבב הבא.", "roundRoll");
+  if (S.wild.boss) {
+    return showMessage(`תור של ${POKEMON[S.wild.id].he}`, lines.join("\n") + "\n\nמטילים שוב קוביות לסבב הבא.", "roundRoll");
+  }
+  // אף אחד לא תפס אותו בסבב - חוזר למקום אקראי בחבילה עם חיים מלאים
+  const name = POKEMON[S.wild.id].he;
+  S.deck.splice(rnd(S.deck.length + 1), 0, S.wild.id);
+  S.wild = null;
+  log(`${name} חזר לחבילה`);
+  resolveWild(`תור של ${name}`, lines.join("\n") + `\n\nאף אחד לא תפס אותו, אז ${name} חוזר למקום אקראי בחבילה עם חיים מלאים.`);
 }
 
 function endGame(win) {

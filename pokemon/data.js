@@ -50,12 +50,12 @@ const TYPE_CHART = {
    power = כמה חיים הוא מוריד בתקיפה רגילה (×1)
    catch = סיכוי התפיסה כשהוא בחיים מלאים */
 const POKEMON = {
-  // התחלתיים
-  bulbasaur:  {dex: 1, he: "בולבזאור",   types: ["grass", "poison"],   hp: 45,  power: 22},
-  charmander: {dex: 4, he: "צ'רמנדר",    types: ["fire"],              hp: 39,  power: 20},
-  squirtle:   {dex: 7, he: "סקווירטל",   types: ["water"],             hp: 44,  power: 17},
-  pikachu:    {dex: 25, he: "פיקאצ'ו",    types: ["electric"],          hp: 35,  power: 18},
-  eevee:      {dex: 133, he: "איווי",      types: ["normal"],            hp: 55,  power: 18},
+  // התחלתיים (catch - אם שחקן יוצא, הם חוזרים לחבילה כפראיים)
+  bulbasaur:  {dex: 1, he: "בולבזאור",   types: ["grass", "poison"],   hp: 45,  power: 22, catch: .35},
+  charmander: {dex: 4, he: "צ'רמנדר",    types: ["fire"],              hp: 39,  power: 20, catch: .35},
+  squirtle:   {dex: 7, he: "סקווירטל",   types: ["water"],             hp: 44,  power: 17, catch: .35},
+  pikachu:    {dex: 25, he: "פיקאצ'ו",    types: ["electric"],          hp: 35,  power: 18, catch: .35},
+  eevee:      {dex: 133, he: "איווי",      types: ["normal"],            hp: 55,  power: 18, catch: .35},
 
   // פראיים בחבילה
   pidgey:     {dex: 16, he: "פידג'י",     types: ["normal", "flying"],  hp: 40,  power: 15, catch: .45},
@@ -89,6 +89,7 @@ const WILD_DECK = [
 
 const CONFIG = {
   maxPlayers: 5,
+  turnSeconds: 20,     // זמן לתור, להטלת קובייה ולבחירת פוקימון התחלתי
   hpScale: 2,          // כל החיים מוכפלים - שהקרבות לא ייגמרו במכה אחת
   clinicEvery: 5,      // מרפאה אחרי כל 5 פוקימונים פראיים
   catchGrowth: 0.8,    // כמה מהסיכוי החסר נוסף כשלפראי לא נשארו חיים

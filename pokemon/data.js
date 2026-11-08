@@ -78,7 +78,7 @@ const POKEMON = {
   mewtwo:     {dex: 150, he: "מיוטו",      types: ["psychic"],           hp: 106, power: 51}
 };
 
-const ART_URL = n => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${n}.png`;
+const ART_URL = n => `art/${n}.png`;
 
 const STARTERS = ["bulbasaur", "charmander", "squirtle", "pikachu", "eevee"];
 

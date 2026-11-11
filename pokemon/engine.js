@@ -13,6 +13,9 @@ const shuffle = arr => {
   return a;
 };
 
+/* כל הפוקימונים חוץ מההתחלתיים והבוס */
+const wildPool = () => Object.keys(POKEMON).filter(id => !STARTERS.includes(id) && id !== CONFIG.boss.id);
+
 function makeMon(id) {
   const hp = POKEMON[id].hp * CONFIG.hpScale;
   return {id, hp, maxHp: hp};
@@ -126,7 +129,7 @@ const Engine = (() => {
 
   function newGame() {
     Object.assign(S, {
-      deck: shuffle(WILD_DECK),
+      deck: shuffle(wildPool()).slice(0, CONFIG.deckSize),
       starterPool: STARTERS.slice(),
       wild: null,
       order: [],

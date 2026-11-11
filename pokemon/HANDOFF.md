@@ -33,6 +33,32 @@ git push origin main
 
 ---
 
+## עדכון: כל 1025 הפוקימונים (לגרסה שכבר עלתה ל-BrawlClash)
+
+הגרסה ב-BrawlClash כבר שונתה במחשב (מכונת מספרים, כפתור "מוכן", זירה בתלת-ממד, פרופיל).
+לכן העדכון הוא קובץ שינויים קטן שמותאם בדיוק אליה: `pokemon/brawlclash-1025.patch` בענף הזה.
+
+**מה הוא עושה:**
+- מוסיף את `pokemon/pokedex.js` עם כל 1025 הפוקימונים (שם בעברית, סוגים, חיים, חוזק, סיכוי תפיסה).
+- `data.js`: מוריד את רשימת הפוקימונים הישנה ואת `WILD_DECK`, מוסיף `CONFIG.deckSize = 15`. תמונות שאין בתיקייה `art` נטענות מ-PokeAPI.
+- `engine.js`: בכל משחק נשלפים 15 פראיים באקראי מכל ה-1025 (חוץ מההתחלתיים והבוס).
+- `arena.js`: התמונות נטענות דרך `ART_URL`, ומראש נטענות רק של ההתחלתיים והבוס (ולא 1025 תמונות).
+- `index.html`: טוען את `pokedex.js`.
+
+**איך מחילים (מתוך התיקייה של BrawlClash, על main המעודכן):**
+
+```bash
+curl -L -o /tmp/brawlclash-1025.patch https://raw.githubusercontent.com/itaydaniel1000-beep/kesef-hacham/claude/pokemon-card-game-a5v2r5/pokemon/brawlclash-1025.patch
+git apply /tmp/brawlclash-1025.patch
+git add pokemon
+git commit -m "feat(pokemon): all 1025 Pokémon, with a random deck of 15 each game"
+git push origin main
+```
+
+אם `git apply` נכשל (כי הקבצים השתנו מאז), צריך לעשות את חמשת השינויים שלמעלה ידנית.
+
+---
+
 ## חוקי המשחק (כפי שהוגדרו)
 
 **כללי**

@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "quicktextures",
+	"version": "${version}",
+	"name": "Quick Textures",
+	"description": "Short press J toggles your chosen resource packs; long press opens a picker.",
+	"authors": ["kesef-hacham"],
+	"license": "MIT",
+	"icon": "assets/quicktextures/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["com.kesefhacham.quicktextures.QuickTexturesClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

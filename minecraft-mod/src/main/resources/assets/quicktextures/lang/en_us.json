@@ -1,0 +1,12 @@
+{
+	"key.category.quicktextures.main": "Quick Textures",
+	"key.quicktextures.toggle": "Toggle my textures (hold: choose)",
+	"quicktextures.screen.title": "Choose my textures",
+	"quicktextures.screen.hint": "Checked packs are turned on/off with a short press of the key",
+	"quicktextures.screen.empty": "No resource packs found. Put packs in the resourcepacks folder.",
+	"quicktextures.screen.incompatible": "Made for a different game version (will be enabled anyway)",
+	"quicktextures.message.on": "Textures: ON",
+	"quicktextures.message.off": "Textures: OFF",
+	"quicktextures.message.none_selected": "Long press J to choose textures",
+	"quicktextures.message.missing": "The chosen packs were not found in the resourcepacks folder"
+}

@@ -1,0 +1,12 @@
+{
+	"key.category.quicktextures.main": "טקסטורות מהירות",
+	"key.quicktextures.toggle": "הדלקה/כיבוי של הטקסטורות שלי (לחיצה ארוכה: בחירה)",
+	"quicktextures.screen.title": "בחירת הטקסטורות שלי",
+	"quicktextures.screen.hint": "החבילות המסומנות נדלקות ונכבות בלחיצה קצרה על המקש",
+	"quicktextures.screen.empty": "לא נמצאו חבילות משאבים. שימו חבילות בתיקיית resourcepacks.",
+	"quicktextures.screen.incompatible": "נבנתה לגרסה אחרת של המשחק (תודלק בכל זאת)",
+	"quicktextures.message.on": "טקסטורות: דולק",
+	"quicktextures.message.off": "טקסטורות: כבוי",
+	"quicktextures.message.none_selected": "לחיצה ארוכה על J כדי לבחור טקסטורות",
+	"quicktextures.message.missing": "החבילות שנבחרו לא נמצאו בתיקיית resourcepacks"
+}
